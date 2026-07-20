@@ -44,6 +44,8 @@ import androidx.compose.ui.unit.dp
 import br.com.nexo.driver.evaluation.Comparator
 import br.com.nexo.driver.evaluation.FilterRule
 import br.com.nexo.driver.evaluation.Metric
+import br.com.nexo.driver.evaluation.RuleBlocker
+import br.com.nexo.driver.evaluation.RulePrerequisites
 import br.com.nexo.driver.profile.DriverProfile
 import br.com.nexo.driver.profile.SharedPreferencesProfileStore
 import br.com.nexo.driver.overlay.preferences.SharedPreferencesOverlayPreferenceStore
@@ -340,7 +342,22 @@ fun NexoApp() {
                     profileName = activeProfile.name,
                     isProfileEnabled = activeProfile.isEnabled,
                     rules = activeProfile.rules,
+                    // Read from the same stores the analysis path uses, so a rule is marked
+                    // inactive on exactly the condition that makes it unresolvable at runtime.
+                    prerequisites = RulePrerequisites(
+                        hasHomeDestination = homeDestination != null,
+                        hasOfflineAddressPackage = offlineMapPackage != null,
+                        isBlocklistEnabled = blockSettings.blockSupermarkets,
+                    ),
                 ),
+                onBlockerAction = { blocker ->
+                    destination = when (blocker) {
+                        RuleBlocker.MISSING_HOME_DESTINATION,
+                        RuleBlocker.MISSING_OFFLINE_ADDRESS_PACKAGE,
+                        -> AppDestination.HOME_DESTINATION
+                        RuleBlocker.BLOCKLIST_DISABLED -> AppDestination.SETTINGS
+                    }
+                },
                 onNavigateBack = {
                     editingRuleId = null
                     destination = AppDestination.HOME

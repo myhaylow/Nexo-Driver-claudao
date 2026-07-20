@@ -1,5 +1,6 @@
 package br.com.nexo.driver.ui.filters
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -8,8 +9,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -26,6 +29,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -35,6 +39,7 @@ import br.com.nexo.driver.evaluation.Comparator
 import br.com.nexo.driver.evaluation.EvaluationMode
 import br.com.nexo.driver.evaluation.FilterRule
 import br.com.nexo.driver.evaluation.Metric
+import br.com.nexo.driver.evaluation.RuleBlocker
 import br.com.nexo.driver.R
 
 /**
@@ -50,6 +55,7 @@ fun FiltersScreen(
     onRuleEnabledChange: (FilterRuleId, Boolean) -> Unit,
     onRuleClick: (FilterRuleId) -> Unit,
     onAddFilter: () -> Unit,
+    onBlockerAction: (RuleBlocker) -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -91,6 +97,7 @@ fun FiltersScreen(
                         FilterSectionCard(
                             section = section,
                             rules = sectionRules,
+                            onBlockerAction = onBlockerAction,
                             onRuleEnabledChange = onRuleEnabledChange,
                             onRuleClick = onRuleClick,
                         )
@@ -114,6 +121,7 @@ fun FiltersScreen(
 private fun FilterSectionCard(
     section: FilterSection,
     rules: List<FilterRulePresentation>,
+    onBlockerAction: (RuleBlocker) -> Unit = {},
     onRuleEnabledChange: (FilterRuleId, Boolean) -> Unit,
     onRuleClick: (FilterRuleId) -> Unit,
 ) {
@@ -130,6 +138,7 @@ private fun FilterSectionCard(
                     item = item,
                     onEnabledChange = { onRuleEnabledChange(item.rule.id, it) },
                     onClick = { onRuleClick(item.rule.id) },
+                    onBlockerAction = onBlockerAction,
                 )
                 if (index != rules.lastIndex) {
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -165,11 +174,63 @@ private fun ProfileSwitchCard(
     }
 }
 
+/**
+ * The inline "this rule cannot run" notice.
+ *
+ * It sits on the offending row rather than in a banner at the top, so the explanation is next to
+ * the thing it explains. Colour alone would not carry it — the label reads "Inativa" and the
+ * blocker states the missing prerequisite in words, so it survives greyscale and screen readers.
+ * The action is the recovery path: naming the problem without offering the fix is what made this
+ * state invisible in the first place.
+ */
+@Composable
+private fun RuleBlockerNotice(blocker: RuleBlocker, onAction: (RuleBlocker) -> Unit) {
+    val tone = MaterialTheme.colorScheme.tertiary
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(tone.copy(alpha = 0.12f))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "Inativa",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = tone,
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = blocker.summary,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        blocker.actionLabel?.let { label ->
+            Spacer(Modifier.width(6.dp))
+            // A 48dp touch target, kept clear of the row's own click area so tapping the fix does
+            // not open the rule editor instead.
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = tone,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable { onAction(blocker) }
+                    .sizeIn(minHeight = 48.dp)
+                    .padding(horizontal = 8.dp, vertical = 12.dp),
+            )
+        }
+    }
+}
+
 @Composable
 private fun FilterRuleRow(
     item: FilterRulePresentation,
     onEnabledChange: (Boolean) -> Unit,
     onClick: () -> Unit,
+    onBlockerAction: (RuleBlocker) -> Unit = {},
 ) {
     Row(
         modifier = Modifier
@@ -204,6 +265,10 @@ private fun FilterRuleRow(
                         border = null,
                     )
                 }
+            }
+            item.blocker?.let { blocker ->
+                Spacer(Modifier.height(6.dp))
+                RuleBlockerNotice(blocker = blocker, onAction = onBlockerAction)
             }
             if (item.rule.mode == EvaluationMode.ELIMINATORY) {
                 Spacer(Modifier.height(4.dp))

@@ -3,6 +3,9 @@ package br.com.nexo.driver.ui.filters
 import br.com.nexo.driver.evaluation.Comparator
 import br.com.nexo.driver.evaluation.FilterRule
 import br.com.nexo.driver.evaluation.Metric
+import br.com.nexo.driver.evaluation.RuleBlocker
+import br.com.nexo.driver.evaluation.RulePrerequisites
+import br.com.nexo.driver.evaluation.blocker
 import br.com.nexo.driver.evaluation.MetricGroup
 import br.com.nexo.driver.evaluation.MetricUnit
 import java.text.NumberFormat
@@ -25,6 +28,16 @@ data class FiltersScreenState(
     val profileName: String,
     val isProfileEnabled: Boolean,
     val rules: List<FilterRule>,
+    /**
+     * What the app can currently satisfy. Rules whose prerequisites are missing are shown as
+     * inactive with the fix, instead of looking identical to working ones while quietly dragging
+     * every offer toward "em análise".
+     */
+    val prerequisites: RulePrerequisites = RulePrerequisites(
+        hasHomeDestination = true,
+        hasOfflineAddressPackage = true,
+        isBlocklistEnabled = true,
+    ),
 )
 
 /** Stable identity for a rule inside a profile. A numeric metric may have both bounds. */
@@ -44,13 +57,15 @@ data class FilterRulePresentation(
     val title: String,
     val comparisonText: String,
     val valueText: String?,
+    /** Set when the rule is on but cannot evaluate; drives the inline warning on its row. */
+    val blocker: RuleBlocker? = null,
 ) {
     val isBoolean: Boolean get() = valueText == null
 }
 
 fun FiltersScreenState.groupedRules(): Map<FilterSection, List<FilterRulePresentation>> =
     rules
-        .map(::FilterRulePresentation)
+        .map { rule -> FilterRulePresentation(rule, prerequisites) }
         .groupBy(FilterRulePresentation::section)
         .mapValues { (_, items) ->
             items.sortedWith(
@@ -59,16 +74,21 @@ fun FiltersScreenState.groupedRules(): Map<FilterSection, List<FilterRulePresent
             )
         }
 
-fun FilterRulePresentation(rule: FilterRule): FilterRulePresentation {
-    val title = rule.metric.displayName
-    return FilterRulePresentation(
-        rule = rule,
-        section = rule.metric.section,
-        title = title,
-        comparisonText = rule.naturalLanguageComparison(),
-        valueText = rule.formattedTarget(),
-    )
-}
+/** Count of enabled-but-inoperative rules, for the summary at the top of the screen. */
+fun FiltersScreenState.blockedRuleCount(): Int =
+    rules.count { rule -> rule.blocker(prerequisites) != null }
+
+fun FilterRulePresentation(
+    rule: FilterRule,
+    prerequisites: RulePrerequisites = RulePrerequisites(true, true, true),
+): FilterRulePresentation = FilterRulePresentation(
+    rule = rule,
+    section = rule.metric.section,
+    title = rule.metric.displayName,
+    comparisonText = rule.naturalLanguageComparison(),
+    valueText = rule.formattedTarget(),
+    blocker = rule.blocker(prerequisites),
+)
 
 /** Section labels are UI copy; the grouping itself belongs to the metric. */
 private val Metric.section: FilterSection
