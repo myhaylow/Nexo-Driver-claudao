@@ -130,21 +130,27 @@ class OfferOverlayPresenter(
      * in the metric's own unit so the line reads the same way as the grid cell it refers to.
      */
     private fun EvaluationResult.explain(): String? {
-        val reason = primaryReason ?: return null
-        if (reason.status == MetricStatus.UNKNOWN) {
-            return "${reason.rule.metric.label}: não foi possível ler"
+        val metric = primaryReason ?: return null
+        // The compensation is a relationship between two rules, so it reads better as a sentence
+        // than as a single "R$/km 2,10 (mín. 1,80)" bound.
+        if (this.reason == br.com.nexo.driver.evaluation.DecisionReason.KM_COMPENSATES_HOUR) {
+            val km = metric.observedValue?.let { metric.rule.metric.formatValue(it) }
+            return if (km != null) "R$/km $km compensa a hora" else "R$/km forte compensa a hora"
         }
-        val observed = reason.observedValue?.let { reason.rule.metric.formatValue(it) } ?: return null
-        val target = reason.rule.target?.let { reason.rule.metric.formatValue(it) }
-        val bound = when (reason.rule.comparator) {
+        if (metric.status == MetricStatus.UNKNOWN) {
+            return "${metric.rule.metric.label}: não foi possível ler"
+        }
+        val observed = metric.observedValue?.let { metric.rule.metric.formatValue(it) } ?: return null
+        val target = metric.rule.target?.let { metric.rule.metric.formatValue(it) }
+        val bound = when (metric.rule.comparator) {
             br.com.nexo.driver.evaluation.Comparator.AT_LEAST -> "mín."
             br.com.nexo.driver.evaluation.Comparator.AT_MOST -> "máx."
             else -> null
         }
         return if (target != null && bound != null) {
-            "${reason.rule.metric.label} $observed ($bound $target)"
+            "${metric.rule.metric.label} $observed ($bound $target)"
         } else {
-            "${reason.rule.metric.label} $observed"
+            "${metric.rule.metric.label} $observed"
         }
     }
 

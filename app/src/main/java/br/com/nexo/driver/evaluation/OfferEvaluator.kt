@@ -18,6 +18,9 @@ const val DEFAULT_ANALYZE_THRESHOLD = 50
  */
 const val DEFAULT_MINIMUM_COVERAGE_PERCENT = 40
 
+/** How far a R$/km must clear its target to compensate a below-target R$/h. */
+const val DEFAULT_STRONG_KM_BONUS = 0.10f
+
 /**
  * How a metric's raw [Long] value relates to what a driver reads and types.
  *
@@ -164,6 +167,36 @@ data class MetricEvaluation(
     val score: Int,
 )
 
+/**
+ * Why the engine reached its verdict, decided at the point of decision rather than derived after.
+ *
+ * Adopted from the sibling project's decision engine, where every outcome carries an explicit
+ * reason instead of one being reconstructed from the metrics. It names the *kind* of decision;
+ * [EvaluationResult.primaryReason] still carries the specific rule and number to show alongside.
+ */
+enum class DecisionReason {
+    /** No rules are configured, so the engine defers rather than judging. */
+    NO_RULES,
+    /** An eliminatory rule failed outright; it alone decided the reject. */
+    ELIMINATORY_BLOCK,
+    /** An eliminatory rule could not be read, so no confident verdict is possible. */
+    ELIMINATORY_UNKNOWN,
+    /** Too little of the card was readable to stand behind accept or reject. */
+    LOW_COVERAGE,
+    /** Score cleared the accept bar with every rule readable. */
+    MEETS_TARGETS,
+    /**
+     * A strong R$/km rescued an offer whose R$/h was close but under target. The relational rule
+     * the sibling project encodes that a weighted average cannot: a good per-km rate compensates a
+     * slightly weak per-hour one.
+     */
+    KM_COMPENSATES_HOUR,
+    /** Score landed in the middle band: neither clearly good nor clearly bad. */
+    BORDERLINE,
+    /** Score fell below the analyze bar. */
+    BELOW_TARGET,
+}
+
 data class EvaluationResult(
     val metrics: List<MetricEvaluation>,
     val weightedScore: Int,
@@ -176,6 +209,8 @@ data class EvaluationResult(
     val coveragePercent: Int = 100,
     /** The rule that most explains [decision], used for the overlay's one-line justification. */
     val primaryReason: MetricEvaluation? = null,
+    /** The kind of decision, set where the decision is made. */
+    val reason: DecisionReason = DecisionReason.NO_RULES,
 ) {
     val hasIncompleteData: Boolean get() = metrics.any { it.status == MetricStatus.UNKNOWN }
 }
@@ -185,11 +220,18 @@ class OfferEvaluator(
     private val acceptThreshold: Int = DEFAULT_ACCEPT_THRESHOLD,
     private val analyzeThreshold: Int = DEFAULT_ANALYZE_THRESHOLD,
     private val minimumCoveragePercent: Int = DEFAULT_MINIMUM_COVERAGE_PERCENT,
+    /**
+     * How far above its target an R$/km rule must sit to compensate a below-target R$/h, as a
+     * fraction. Mirrors the sibling engine's `strongKmBonus`; 0.10 means the per-km must clear its
+     * minimum by 10%.
+     */
+    private val strongKmBonus: Float = DEFAULT_STRONG_KM_BONUS,
 ) {
     init {
         require(confidenceThreshold in 0f..1f)
         require(acceptThreshold in analyzeThreshold..100)
         require(minimumCoveragePercent in 0..100)
+        require(strongKmBonus >= 0f)
     }
 
     fun derive(offer: NormalizedOffer): DerivedMetrics {
@@ -269,22 +311,58 @@ class OfferEvaluator(
             if (configuredWeight == 0L) 0 else (readableWeight * 100 / configuredWeight).toInt()
         val hardFailure = metrics.any { it.rule.mode == EvaluationMode.ELIMINATORY && it.status == MetricStatus.FAIL }
         val hardUnknown = metrics.any { it.rule.mode == EvaluationMode.ELIMINATORY && it.status == MetricStatus.UNKNOWN }
-        val decision = when {
-            hardFailure -> OfferDecision.REJECT
-            hardUnknown -> OfferDecision.ANALYZE
-            // Too little of the card was readable to stand behind any verdict.
-            coveragePercent < minimumCoveragePercent -> OfferDecision.ANALYZE
-            weightedScore >= acceptThreshold && metrics.none { it.status == MetricStatus.UNKNOWN } -> OfferDecision.ACCEPT
-            weightedScore >= analyzeThreshold -> OfferDecision.ANALYZE
-            else -> OfferDecision.REJECT
+        // Base decision, then a reason to match it. Kept as one when so the two never drift apart.
+        val base: Pair<OfferDecision, DecisionReason> = when {
+            hardFailure -> OfferDecision.REJECT to DecisionReason.ELIMINATORY_BLOCK
+            hardUnknown -> OfferDecision.ANALYZE to DecisionReason.ELIMINATORY_UNKNOWN
+            coveragePercent < minimumCoveragePercent -> OfferDecision.ANALYZE to DecisionReason.LOW_COVERAGE
+            weightedScore >= acceptThreshold && metrics.none { it.status == MetricStatus.UNKNOWN } ->
+                OfferDecision.ACCEPT to DecisionReason.MEETS_TARGETS
+            weightedScore >= analyzeThreshold -> OfferDecision.ANALYZE to DecisionReason.BORDERLINE
+            else -> OfferDecision.REJECT to DecisionReason.BELOW_TARGET
+        }
+        // A strong R$/km can lift an offer whose R$/h is only just short. Applied only to a scored
+        // ANALYZE -- never over a hard block, a missing read, or low coverage -- so it can rescue a
+        // borderline offer but never a genuinely bad one. This is the relational judgement the
+        // weighted average cannot make on its own; unlike the sibling engine it carries no traffic
+        // guard, because the ride apps do not expose a traffic signal we could trust.
+        val (decision, reason) = if (base.first == OfferDecision.ANALYZE &&
+            base.second == DecisionReason.BORDERLINE &&
+            kmCompensatesHour(metrics)
+        ) {
+            OfferDecision.ACCEPT to DecisionReason.KM_COMPENSATES_HOUR
+        } else {
+            base
         }
         return EvaluationResult(
             metrics = metrics,
             weightedScore = weightedScore,
             decision = decision,
             coveragePercent = coveragePercent,
-            primaryReason = primaryReason(metrics, decision),
+            primaryReason = primaryReason(metrics, decision, reason),
+            reason = reason,
         )
+    }
+
+    /**
+     * True when an R$/km rule passes strongly while an R$/h rule is within tolerance but under
+     * target -- the "strong per-km compensates a weak per-hour" case. Requires both rules to be
+     * present and configured as minimums, so it only fires when the driver actually filters on
+     * both. The per-km must clear its own target by [strongKmBonus]; the per-hour must be NEAR
+     * (inside its band), never FAIL.
+     */
+    private fun kmCompensatesHour(metrics: List<MetricEvaluation>): Boolean {
+        val km = metrics.firstOrNull {
+            it.rule.metric == Metric.RATE_PER_KM && it.rule.comparator == Comparator.AT_LEAST
+        } ?: return false
+        val hour = metrics.firstOrNull {
+            it.rule.metric == Metric.RATE_PER_HOUR && it.rule.comparator == Comparator.AT_LEAST
+        } ?: return false
+        if (hour.status != MetricStatus.NEAR) return false
+        if (km.status != MetricStatus.PASS) return false
+        val kmTarget = km.rule.target ?: return false
+        val kmValue = km.observedValue ?: return false
+        return kmValue >= kmTarget + (kmTarget * strongKmBonus).toLong()
     }
 
     /**
@@ -298,7 +376,16 @@ class OfferEvaluator(
      * points at the wrong thing to fix. An unknown is only the headline when nothing else explains
      * the verdict, or when it is what blocked a decision outright.
      */
-    private fun primaryReason(metrics: List<MetricEvaluation>, decision: OfferDecision): MetricEvaluation? {
+    private fun primaryReason(
+        metrics: List<MetricEvaluation>,
+        decision: OfferDecision,
+        reason: DecisionReason,
+    ): MetricEvaluation? {
+        // The compensation accepted on the strength of the per-km rule, so that is the number worth
+        // showing -- not the per-hour that fell short.
+        if (reason == DecisionReason.KM_COMPENSATES_HOUR) {
+            metrics.firstOrNull { it.rule.metric == Metric.RATE_PER_KM }?.let { return it }
+        }
         metrics.firstOrNull { it.rule.mode == EvaluationMode.ELIMINATORY && it.status == MetricStatus.FAIL }
             ?.let { return it }
         metrics.firstOrNull { it.rule.mode == EvaluationMode.ELIMINATORY && it.status == MetricStatus.UNKNOWN }
