@@ -146,6 +146,13 @@ class OfferAnalysisProcessor(
 
         if (allowSideEffects) {
             OfferSessionMetricsRepository.record(enrichedOffer)
+            // Numbers only, for the rule editor's session impact preview. The evaluator already
+            // computed these observed values; nothing new is collected and no offer content is kept.
+            OfferSessionMetricsRepository.recordSamples(
+                evaluation.metrics
+                    .mapNotNull { m -> m.observedValue?.let { m.rule.metric to it } }
+                    .toMap(),
+            )
         }
         if (allowSideEffects && settings.speakDecision) {
             speaker?.speak(overlay)

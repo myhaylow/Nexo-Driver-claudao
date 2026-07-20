@@ -402,6 +402,7 @@ fun NexoApp() {
                             homeDestinationDetails = homeDestination?.displayDetails(),
                             kilometresAnalyzed = locationSnapshot.sessionDistanceMeters / 1_000.0,
                             offersEvaluated = sessionMetrics.offersEvaluated,
+                            readMetrics = sessionMetrics,
                             location = locationSnapshot,
                         ),
                         onReaderEnabledChanged = { enabled ->

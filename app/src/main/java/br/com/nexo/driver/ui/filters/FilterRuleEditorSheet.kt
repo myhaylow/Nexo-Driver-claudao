@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import br.com.nexo.driver.analysis.OfferSessionMetricsRepository
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -118,6 +119,20 @@ fun FilterRuleEditorSheet(
                     isError = !targetIsValid,
                 )
 
+                // Immediate answer to "what does this target actually filter out?" against the
+                // offers already seen this session -- so calibrating is not blind. Session-only and
+                // numbers-only; nothing about the ride is kept.
+                val impact = remember(parsedTarget, comparator, rule.metric) {
+                    parsedTarget?.let {
+                        OfferSessionMetricsRepository.impactOf(
+                            metric = rule.metric,
+                            target = it,
+                            atLeast = comparator == Comparator.AT_LEAST,
+                        )
+                    }
+                }
+                RuleImpactPreview(impact)
+
                 RuleNumberSlider(
                     label = "Tolerância",
                     valueText = "$tolerancePercent%",
@@ -172,6 +187,27 @@ fun FilterRuleEditorSheet(
             }
         }
     }
+}
+
+/**
+ * "Nas ofertas desta sessão, X de N passariam" for the target being typed.
+ *
+ * A driver setting "R$/km ≥ 1,75" otherwise has no way to know if that rejects a tenth of rides or
+ * most of them until they drive. When no offers have been seen yet, it says so rather than showing
+ * a hollow "0 de 0" that would read as a failure.
+ */
+@Composable
+private fun RuleImpactPreview(impact: br.com.nexo.driver.analysis.ImpactSample?) {
+    val text = when {
+        impact == null -> "Sem ofertas nesta sessão para prever o impacto ainda."
+        else -> "Nesta sessão, ${impact.passing} de ${impact.total} ofertas passariam (${impact.percent}%)."
+    }
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 8.dp),
+    )
 }
 
 @Composable

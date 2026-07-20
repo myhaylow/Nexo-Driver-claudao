@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -25,8 +28,13 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -73,186 +81,233 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(
-                text = "Aparência",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = "Escolha como o Driver Inteligente aparece no seu celular.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            PreferenceCard(title = "Tema", description = "Define claro, escuro ou acompanha o Android.") {
-                ChoiceGroup(
-                    options = DriverThemeMode.entries,
-                    selected = state.themeMode,
-                    label = DriverThemeMode::displayName,
-                    onSelected = onThemeModeChanged,
-                )
-            }
-
-            PreferenceCard(
-                title = "Estilo visual",
-                description = "Muda as cores do app e do card de oferta. As três últimas são feitas " +
-                    "para condições específicas de leitura.",
+            // Grouped by intent, not by control type. "Rigor da decisão" and "Duração do card" were
+            // previously neighbours in one long scroll despite being unrelated; a driver hunting one
+            // setting had to pass every other. Decision opens first because it is what a driver
+            // tunes most; the rest start collapsed so the screen is scannable at a glance.
+            SettingsSection(
+                title = "Decisão",
+                subtitle = "Como o app julga cada oferta.",
+                initiallyExpanded = true,
             ) {
-                ChoiceGroup(
-                    options = DriverVisualStyle.entries,
-                    selected = state.visualStyle,
-                    label = DriverVisualStyle::displayName,
-                    onSelected = onVisualStyleChanged,
-                    supportingText = DriverVisualStyle::usageHint,
-                )
-            }
-
-            PreferenceCard(title = "Tamanho da fonte", description = "Aumente a leitura sem alterar os filtros.") {
-                ChoiceGroup(
-                    options = AppFontScale.entries,
-                    selected = state.fontScale,
-                    label = AppFontScale::label,
-                    onSelected = onFontScaleChanged,
-                )
-            }
-
-            PreferenceCard(
-                title = "Visão de cores",
-                description = "Ajusta as cores de aceitar e recusar para daltonismo. O semáforo e as " +
-                    "setas continuam indicando a decisão pela posição e pelo símbolo.",
-            ) {
-                ChoiceGroup(
-                    options = ColorVisionScheme.entries,
-                    selected = state.colorVisionScheme,
-                    label = ColorVisionScheme::displayName,
-                    onSelected = onColorVisionSchemeChanged,
-                )
-            }
-
-            PreferenceCard(
-                title = "Duração do card",
-                description = "Por quanto tempo a análise fica na tela antes de sumir sozinha.",
-            ) {
-                ChoiceGroup(
-                    options = CARD_DURATION_OPTIONS,
-                    selected = CARD_DURATION_OPTIONS.minByOrNull {
-                        kotlin.math.abs(it - state.cardDurationMs)
-                    } ?: DEFAULT_CARD_DURATION_MS,
-                    label = { millis -> "${millis / 1000}s" },
-                    onSelected = onCardDurationChanged,
-                )
-            }
-
-            PreferenceCard(
-                title = "Rigor da decisão",
-                description = "Define o quanto uma corrida precisa pontuar para aparecer como aceitar " +
-                    "ou como análise. Mais exigente recusa mais; mais tolerante aceita mais.",
-            ) {
-                ChoiceGroup(
-                    options = DecisionStrictness.entries,
-                    selected = DecisionStrictness.forThresholds(state.acceptThreshold, state.analyzeThreshold),
-                    label = DecisionStrictness::label,
-                    onSelected = { strictness ->
-                        onDecisionThresholdsChanged(strictness.acceptThreshold, strictness.analyzeThreshold)
-                    },
-                )
-            }
-
-            OverlayPreferencesCard(
-                position = state.overlayPosition,
-                preferences = state.overlayPreferences,
-                onPositionChanged = onOverlayPositionChanged,
-                onPreferencesChanged = onOverlayPreferencesChanged,
-            )
-            Text(
-                text = "Leitura e voz",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = "A acessibilidade lê os cards quando o app da corrida expõe texto. O OCR por tela continua como fallback.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            PreferenceCard(
-                title = "Serviço de acessibilidade",
-                description = if (state.accessibilityServiceEnabled) {
-                    "Ativo: leitura principal por acessibilidade habilitada."
-                } else {
-                    "Inativo: toque para abrir as configurações do Android e ativar manualmente."
-                },
-            ) {
-                Button(modifier = Modifier.fillMaxWidth(), onClick = onOpenAccessibilitySettings) {
-                    Text(if (state.accessibilityServiceEnabled) "Abrir acessibilidade" else "Ativar acessibilidade")
-                }
-            }
-            if (state.showDebugTools) {
                 PreferenceCard(
-                    title = "Testar imagem da galeria",
-                    description = "Escolha uma captura da Uber ou 99. A imagem passa pelo mesmo OCR, filtros e overlay, sem ser salva pelo app.",
+                    title = "Rigor da decisão",
+                    description = "Define o quanto uma corrida precisa pontuar para aparecer como aceitar " +
+                        "ou como análise. Mais exigente recusa mais; mais tolerante aceita mais.",
                 ) {
-                    Button(modifier = Modifier.fillMaxWidth(), onClick = onTestGalleryImage) {
-                        Text("Selecionar captura")
-                    }
-                    state.galleryTestStatus?.let { status ->
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = status,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    ChoiceGroup(
+                        options = DecisionStrictness.entries,
+                        selected = DecisionStrictness.forThresholds(state.acceptThreshold, state.analyzeThreshold),
+                        label = DecisionStrictness::label,
+                        onSelected = { strictness ->
+                            onDecisionThresholdsChanged(strictness.acceptThreshold, strictness.analyzeThreshold)
+                        },
+                    )
+                }
+                PreferenceCard(
+                    title = "Duração do card",
+                    description = "Por quanto tempo a análise fica na tela antes de sumir sozinha.",
+                ) {
+                    ChoiceGroup(
+                        options = CARD_DURATION_OPTIONS,
+                        selected = CARD_DURATION_OPTIONS.minByOrNull {
+                            kotlin.math.abs(it - state.cardDurationMs)
+                        } ?: DEFAULT_CARD_DURATION_MS,
+                        label = { millis -> "${millis / 1000}s" },
+                        onSelected = onCardDurationChanged,
+                    )
                 }
             }
-            PreferenceCard(
-                title = "Falar decisão da corrida",
-                description = "Fala uma vez por oferta nova: aceitar, analisar ou recusar, junto com o valor.",
-            ) {
-                ToggleRow(
-                    label = if (state.speakDecision) "Fala ligada" else "Fala desligada",
-                    checked = state.speakDecision,
-                    onCheckedChange = onSpeakDecisionChanged,
+
+            SettingsSection(title = "Overlay", subtitle = "O card exibido sobre o app de corrida.") {
+                OverlayPreferencesCard(
+                    position = state.overlayPosition,
+                    preferences = state.overlayPreferences,
+                    onPositionChanged = onOverlayPositionChanged,
+                    onPreferencesChanged = onOverlayPreferencesChanged,
                 )
             }
 
-            Text(
-                text = "Custos e bloqueios",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = "Lucro pode participar dos filtros quando você ativar regras. O app nunca toca, aceita ou recusa sozinho.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            PreferenceCard(
-                title = "Combustível",
-                description = "Usado para estimar o lucro líquido da corrida (valor − combustível).",
+            SettingsSection(title = "Aparência", subtitle = "Cores, tema e tamanho do texto.") {
+                PreferenceCard(title = "Tema", description = "Define claro, escuro ou acompanha o Android.") {
+                    ChoiceGroup(
+                        options = DriverThemeMode.entries,
+                        selected = state.themeMode,
+                        label = DriverThemeMode::displayName,
+                        onSelected = onThemeModeChanged,
+                    )
+                }
+                PreferenceCard(
+                    title = "Estilo visual",
+                    description = "Muda as cores do app e do card de oferta. As três últimas são feitas " +
+                        "para condições específicas de leitura.",
+                ) {
+                    ChoiceGroup(
+                        options = DriverVisualStyle.entries,
+                        selected = state.visualStyle,
+                        label = DriverVisualStyle::displayName,
+                        onSelected = onVisualStyleChanged,
+                        supportingText = DriverVisualStyle::usageHint,
+                    )
+                }
+                PreferenceCard(title = "Tamanho da fonte", description = "Aumente a leitura sem alterar os filtros.") {
+                    ChoiceGroup(
+                        options = AppFontScale.entries,
+                        selected = state.fontScale,
+                        label = AppFontScale::label,
+                        onSelected = onFontScaleChanged,
+                    )
+                }
+                PreferenceCard(
+                    title = "Visão de cores",
+                    description = "Ajusta as cores de aceitar e recusar para daltonismo. O semáforo e as " +
+                        "setas continuam indicando a decisão pela posição e pelo símbolo.",
+                ) {
+                    ChoiceGroup(
+                        options = ColorVisionScheme.entries,
+                        selected = state.colorVisionScheme,
+                        label = ColorVisionScheme::displayName,
+                        onSelected = onColorVisionSchemeChanged,
+                    )
+                }
+            }
+
+            SettingsSection(
+                title = "Leitura e voz",
+                subtitle = "Como o app lê os cards e anuncia a decisão.",
             ) {
-                StepperRow(
-                    label = "Preço do litro",
-                    value = "R$ %.2f".format(state.fuelPricePerLiterCents / 100.0),
-                    onDecrement = { onFuelPriceChanged((state.fuelPricePerLiterCents - 10).coerceAtLeast(0)) },
-                    onIncrement = { onFuelPriceChanged(state.fuelPricePerLiterCents + 10) },
-                )
-                Spacer(Modifier.height(8.dp))
-                StepperRow(
-                    label = "Consumo",
-                    value = "%.1f km/L".format(state.fuelKilometersPerLiter),
-                    onDecrement = { onFuelConsumptionChanged((state.fuelKilometersPerLiter - 0.5).coerceAtLeast(1.0)) },
-                    onIncrement = { onFuelConsumptionChanged(state.fuelKilometersPerLiter + 0.5) },
+                PreferenceCard(
+                    title = "Serviço de acessibilidade",
+                    description = if (state.accessibilityServiceEnabled) {
+                        "Ativo: leitura principal por acessibilidade habilitada."
+                    } else {
+                        "Inativo: toque para abrir as configurações do Android e ativar manualmente."
+                    },
+                ) {
+                    Button(modifier = Modifier.fillMaxWidth(), onClick = onOpenAccessibilitySettings) {
+                        Text(if (state.accessibilityServiceEnabled) "Abrir acessibilidade" else "Ativar acessibilidade")
+                    }
+                }
+                PreferenceCard(
+                    title = "Falar decisão da corrida",
+                    description = "Fala uma vez por oferta nova: aceitar, analisar ou recusar, junto com o valor.",
+                ) {
+                    ToggleRow(
+                        label = if (state.speakDecision) "Fala ligada" else "Fala desligada",
+                        checked = state.speakDecision,
+                        onCheckedChange = onSpeakDecisionChanged,
+                    )
+                }
+                if (state.showDebugTools) {
+                    PreferenceCard(
+                        title = "Testar imagem da galeria",
+                        description = "Escolha uma captura da Uber ou 99. A imagem passa pelo mesmo OCR, filtros e overlay, sem ser salva pelo app.",
+                    ) {
+                        Button(modifier = Modifier.fillMaxWidth(), onClick = onTestGalleryImage) {
+                            Text("Selecionar captura")
+                        }
+                        state.galleryTestStatus?.let { status ->
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = status,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+
+            SettingsSection(
+                title = "Custos e bloqueios",
+                subtitle = "Combustível para o lucro e a lista de bloqueio.",
+            ) {
+                PreferenceCard(
+                    title = "Combustível",
+                    description = "Usado para estimar o lucro líquido da corrida (valor − combustível).",
+                ) {
+                    StepperRow(
+                        label = "Preço do litro",
+                        value = "R$ %.2f".format(state.fuelPricePerLiterCents / 100.0),
+                        onDecrement = { onFuelPriceChanged((state.fuelPricePerLiterCents - 10).coerceAtLeast(0)) },
+                        onIncrement = { onFuelPriceChanged(state.fuelPricePerLiterCents + 10) },
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    StepperRow(
+                        label = "Consumo",
+                        value = "%.1f km/L".format(state.fuelKilometersPerLiter),
+                        onDecrement = { onFuelConsumptionChanged((state.fuelKilometersPerLiter - 0.5).coerceAtLeast(1.0)) },
+                        onIncrement = { onFuelConsumptionChanged(state.fuelKilometersPerLiter + 0.5) },
+                    )
+                }
+                PreferenceCard(
+                    title = "Bloquear supermercados",
+                    description = "Quando ligado, corridas que começam em supermercado viram recusa (card vermelho) e a voz fala \"supermercado\".",
+                ) {
+                    ToggleRow(
+                        label = if (state.blockSupermarkets) "Bloqueio ligado" else "Bloqueio desligado",
+                        checked = state.blockSupermarkets,
+                        onCheckedChange = onBlockSupermarketsChanged,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A collapsible group of related settings.
+ *
+ * Grouping by intent turns a flat ten-card scroll into a scannable list of sections a driver can
+ * open on demand. The whole header is one 56dp touch target; the chevron rotates to signal state
+ * so it never reads as a dead label, and the expanded content animates rather than snapping in.
+ */
+@Composable
+private fun SettingsSection(
+    title: String,
+    subtitle: String,
+    initiallyExpanded: Boolean = false,
+    content: @Composable () -> Unit,
+) {
+    var expanded by rememberSaveable(title) { mutableStateOf(initiallyExpanded) }
+    val chevronRotation by animateFloatAsState(if (expanded) 180f else 0f, label = "chevron")
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
+        Column(modifier = Modifier.padding(vertical = 6.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .heightIn(min = 56.dp)
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                // A text chevron rather than a Material icon: the project does not depend on the
+                // material-icons artifact, and pulling it in for one glyph is not worth ~2 MB.
+                Text(
+                    text = "⌄",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.rotate(chevronRotation),
                 )
             }
-            PreferenceCard(
-                title = "Bloquear supermercados",
-                description = "Quando ligado, corridas que começam em supermercado viram recusa (card vermelho) e a voz fala \"supermercado\".",
-            ) {
-                ToggleRow(
-                    label = if (state.blockSupermarkets) "Bloqueio ligado" else "Bloqueio desligado",
-                    checked = state.blockSupermarkets,
-                    onCheckedChange = onBlockSupermarketsChanged,
+            AnimatedVisibility(visible = expanded) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    content = { content() },
                 )
             }
         }

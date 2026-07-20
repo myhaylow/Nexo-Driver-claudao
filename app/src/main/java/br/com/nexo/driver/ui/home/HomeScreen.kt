@@ -1,5 +1,6 @@
 package br.com.nexo.driver.ui.home
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
@@ -23,9 +25,12 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import br.com.nexo.driver.analysis.OfferReadPath
+import br.com.nexo.driver.analysis.OfferSessionMetrics
 import br.com.nexo.driver.location.CurrentLocationServiceSnapshot
 import br.com.nexo.driver.location.CurrentLocationServiceStatus
 
@@ -38,6 +43,8 @@ data class HomeScreenState(
     val homeDestinationDetails: String? = null,
     val kilometresAnalyzed: Double = 0.0,
     val offersEvaluated: Int = 0,
+    /** Read-health of this session; drives the "últimas ofertas" panel. */
+    val readMetrics: OfferSessionMetrics = OfferSessionMetrics(),
     val location: CurrentLocationServiceSnapshot = CurrentLocationServiceSnapshot(),
 )
 
@@ -67,6 +74,9 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             ReaderCard(state.readerEnabled, state.readerStatusText, onReaderEnabledChanged)
+            if (state.readerEnabled) {
+                ReadHealthCard(state.readMetrics)
+            }
             CurrentLocationCard(state.location, onLocationEnabledChanged)
             ProfileCard(state.activeProfileName, state.activeProfileSummary, onOpenFilters)
             HomeDestinationCard(state.homeDestination, state.homeDestinationDetails, onConfigureHome)
@@ -116,6 +126,83 @@ private fun CurrentLocationCard(
                 }
             }
             Switch(checked = enabled, onCheckedChange = onEnabledChanged)
+        }
+    }
+}
+
+/**
+ * A glanceable read-health panel, shown only while the reader is on.
+ *
+ * The plain "Ativo" state hid the fact that offers can be served entirely through the OCR fallback
+ * while the accessibility tree delivers nothing — visible before only in logcat. This surfaces the
+ * three numbers from the served-offer log: how the last card was read, how long capture→overlay
+ * took, and how much of it was readable. An all-OCR session is called out in an amber tone because
+ * it means the fast path stopped working; it never relies on colour alone, the text says so.
+ *
+ * Before the first offer of a session it shows a waiting state rather than empty zeros, so an idle
+ * driver is not misled into thinking something failed.
+ */
+@Composable
+private fun ReadHealthCard(metrics: OfferSessionMetrics) {
+    SectionCard {
+        Text(
+            "Últimas ofertas",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(10.dp))
+        if (metrics.totalReads == 0) {
+            Text(
+                "Aguardando a primeira oferta desta sessão.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            return@SectionCard
+        }
+        MetricRow("Lidas", metrics.totalReads.toString())
+        metrics.lastLatencyMs?.let {
+            Spacer(Modifier.height(10.dp))
+            MetricRow("Tempo até o card", "$it ms")
+        }
+        metrics.lastCoveragePercent?.let {
+            Spacer(Modifier.height(10.dp))
+            MetricRow("Dados lidos", "$it%")
+        }
+        metrics.lastReadPath?.let { path ->
+            Spacer(Modifier.height(10.dp))
+            MetricRow(
+                "Última leitura",
+                when (path) {
+                    OfferReadPath.ACCESSIBILITY -> "acessibilidade"
+                    OfferReadPath.OCR -> "OCR"
+                },
+            )
+        }
+        if (metrics.isOcrOnly) {
+            Spacer(Modifier.height(12.dp))
+            val tone = MaterialTheme.colorScheme.tertiary
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(tone.copy(alpha = 0.12f))
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Só por OCR",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = tone,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "A leitura rápida por acessibilidade não está funcionando neste app. " +
+                        "O OCR consome mais bateria.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

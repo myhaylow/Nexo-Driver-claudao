@@ -197,6 +197,8 @@ class DriverAccessibilityService : AccessibilityService() {
         screenshotFallback?.close()
         screenshotFallback = null
         pipeline.reset()
+        // Session-only impact samples must not outlive the reader.
+        br.com.nexo.driver.analysis.OfferSessionMetricsRepository.clearSamples()
         runCatching { overlayWindow?.close() }
         overlayWindow = null
         runCatching { speaker?.close() }
@@ -245,6 +247,18 @@ class DriverAccessibilityService : AccessibilityService() {
         if (ageMs > LIVE_LATENCY_BUDGET_MS) {
             Log.w(TAG, "LIVE latency budget exceeded: ${ageMs}ms > ${LIVE_LATENCY_BUDGET_MS}ms")
         }
+        // The same numbers, surfaced on Home so the driver can see whether the fast path works
+        // without reading logcat. This is what made "everything is coming via OCR" visible.
+        br.com.nexo.driver.analysis.OfferSessionMetricsRepository.recordReadHealth(
+            br.com.nexo.driver.analysis.OfferReadHealth(
+                path = when (source) {
+                    AnalysisSource.ACCESSIBILITY -> br.com.nexo.driver.analysis.OfferReadPath.ACCESSIBILITY
+                    AnalysisSource.OCR -> br.com.nexo.driver.analysis.OfferReadPath.OCR
+                },
+                latencyMs = ageMs.coerceAtLeast(0L),
+                coveragePercent = result.overlay.coveragePercent,
+            ),
+        )
     }
 
     /**
