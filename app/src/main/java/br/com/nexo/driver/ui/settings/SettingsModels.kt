@@ -92,6 +92,20 @@ fun DriverVisualStyle.displayName(): String = when (this) {
     DriverVisualStyle.OVERLAY_NEON -> "Overlay neon"
     DriverVisualStyle.COCKPIT_PRO -> "Cockpit Pro (recomendado)"
     DriverVisualStyle.MINIMAL_PREMIUM -> "Minimal premium"
+    DriverVisualStyle.SOL_FORTE -> "Sol forte"
+    DriverVisualStyle.NOITE_QUENTE -> "Noite quente"
+    DriverVisualStyle.MONOCROMO -> "Monocromo"
+}
+
+/** One line saying when each identity is the right choice, shown under the option. */
+fun DriverVisualStyle.usageHint(): String = when (this) {
+    DriverVisualStyle.CURRENT -> "O visual original do app."
+    DriverVisualStyle.OVERLAY_NEON -> "Neon puro, alto impacto."
+    DriverVisualStyle.COCKPIT_PRO -> "Equilibrado para o dia a dia."
+    DriverVisualStyle.MINIMAL_PREMIUM -> "Discreto, cores suaves."
+    DriverVisualStyle.SOL_FORTE -> "Para sol batendo na tela: contraste máximo."
+    DriverVisualStyle.NOITE_QUENTE -> "Para dirigir à noite: menos luz azul, card mais apagado."
+    DriverVisualStyle.MONOCROMO -> "Cinza no card inteiro; só o semáforo tem cor."
 }
 
 fun OverlaySlot.displayName(): String = when (this) {

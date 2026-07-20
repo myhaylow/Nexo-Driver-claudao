@@ -15,11 +15,28 @@ enum class DriverThemeMode {
     SYSTEM,
 }
 
+/**
+ * Visual identities for the app and the offer card.
+ *
+ * The first four are the original set and are untouched. The three that follow exist because a
+ * driver reads this card in conditions that change through the day: midday glare on the
+ * windscreen, night driving where a bright card ruins dark adaptation, and busy screens where the
+ * verdict has to win against the ride app behind it. Each targets one of those.
+ */
 enum class DriverVisualStyle {
     CURRENT,
     OVERLAY_NEON,
     COCKPIT_PRO,
     MINIMAL_PREMIUM,
+
+    /** Midday glare: maximum contrast and saturated verdicts that survive a washed-out screen. */
+    SOL_FORTE,
+
+    /** Night driving: warm, blue-light-reduced, dimmed so it does not destroy dark adaptation. */
+    NOITE_QUENTE,
+
+    /** Neutral surfaces with colour spent only on the verdict, for the busiest screens. */
+    MONOCROMO,
 }
 
 private val LocalDriverStatusColors = staticCompositionLocalOf { DriverInteligenteLightStatusColors }

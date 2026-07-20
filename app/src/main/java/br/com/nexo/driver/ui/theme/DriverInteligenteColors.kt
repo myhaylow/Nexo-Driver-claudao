@@ -112,6 +112,9 @@ internal fun colorSchemeFor(style: DriverVisualStyle, darkTheme: Boolean): Color
     DriverVisualStyle.OVERLAY_NEON -> if (darkTheme) DriverOverlayNeonDarkColors else DriverOverlayNeonLightColors
     DriverVisualStyle.COCKPIT_PRO -> if (darkTheme) DriverCockpitProDarkColors else DriverCockpitProLightColors
     DriverVisualStyle.MINIMAL_PREMIUM -> if (darkTheme) DriverMinimalPremiumDarkColors else DriverMinimalPremiumLightColors
+    DriverVisualStyle.SOL_FORTE -> if (darkTheme) DriverSolForteDarkColors else DriverSolForteLightColors
+    DriverVisualStyle.NOITE_QUENTE -> if (darkTheme) DriverNoiteQuenteDarkColors else DriverNoiteQuenteLightColors
+    DriverVisualStyle.MONOCROMO -> if (darkTheme) DriverMonocromoDarkColors else DriverMonocromoLightColors
 }
 
 internal fun statusColorsFor(style: DriverVisualStyle, darkTheme: Boolean): DriverStatusColors = when (style) {
@@ -119,6 +122,9 @@ internal fun statusColorsFor(style: DriverVisualStyle, darkTheme: Boolean): Driv
     DriverVisualStyle.OVERLAY_NEON -> if (darkTheme) DriverOverlayNeonDarkStatusColors else DriverOverlayNeonLightStatusColors
     DriverVisualStyle.COCKPIT_PRO -> if (darkTheme) DriverCockpitProDarkStatusColors else DriverCockpitProLightStatusColors
     DriverVisualStyle.MINIMAL_PREMIUM -> if (darkTheme) DriverMinimalPremiumDarkStatusColors else DriverMinimalPremiumLightStatusColors
+    DriverVisualStyle.SOL_FORTE -> if (darkTheme) DriverSolForteDarkStatusColors else DriverSolForteLightStatusColors
+    DriverVisualStyle.NOITE_QUENTE -> if (darkTheme) DriverNoiteQuenteDarkStatusColors else DriverNoiteQuenteLightStatusColors
+    DriverVisualStyle.MONOCROMO -> if (darkTheme) DriverMonocromoDarkStatusColors else DriverMonocromoLightStatusColors
 }
 
 private val DriverOverlayNeonLightColors: ColorScheme = lightColorScheme(
