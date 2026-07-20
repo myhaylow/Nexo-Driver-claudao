@@ -95,12 +95,17 @@ fun SettingsScreen(
                 )
             }
 
-            PreferenceCard(title = "Estilo visual", description = "Escolha entre o visual atual e três novas variantes do app e overlay.") {
+            PreferenceCard(
+                title = "Estilo visual",
+                description = "Muda as cores do app e do card de oferta. As três últimas são feitas " +
+                    "para condições específicas de leitura.",
+            ) {
                 ChoiceGroup(
                     options = DriverVisualStyle.entries,
                     selected = state.visualStyle,
                     label = DriverVisualStyle::displayName,
                     onSelected = onVisualStyleChanged,
+                    supportingText = DriverVisualStyle::usageHint,
                 )
             }
 
@@ -369,9 +374,16 @@ private fun <T> ChoiceGroup(
     selected: T,
     label: (T) -> String,
     onSelected: (T) -> Unit,
+    /**
+     * Optional second line per option. Some choices are self-explanatory from the label alone;
+     * others -- the visual styles, which are named after driving conditions rather than colours --
+     * are only choosable if the option says what it is for.
+     */
+    supportingText: ((T) -> String)? = null,
 ) {
     Column(Modifier.selectableGroup()) {
         options.forEach { option ->
+            val hint = supportingText?.invoke(option)?.takeIf(String::isNotBlank)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -380,12 +392,22 @@ private fun <T> ChoiceGroup(
                         selected = option == selected,
                         role = Role.RadioButton,
                         onClick = { onSelected(option) },
-                    ),
+                    )
+                    .padding(vertical = if (hint == null) 0.dp else 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 RadioButton(selected = option == selected, onClick = null)
                 Spacer(Modifier.width(12.dp))
-                Text(label(option), style = MaterialTheme.typography.bodyLarge)
+                Column {
+                    Text(label(option), style = MaterialTheme.typography.bodyLarge)
+                    if (hint != null) {
+                        Text(
+                            text = hint,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
         }
     }
