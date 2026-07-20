@@ -15,9 +15,17 @@ import br.com.nexo.driver.offer.OfferSource
  */
 internal object OfferLayoutSignatures {
 
-    /** Uber's service tier line ("UberX", "2 Comfort", "Priority exclusivo", ...). */
+    /**
+     * Uber's service tier line ("UberX", "2 Comfort", "Priority exclusivo", ...).
+     *
+     * The `\b` after the tier keyword is load-bearing: without it, "x" followed by `.*` matched any
+     * word starting with a tier letter -- a Curitiba neighbourhood named "XAXIM" at the top of the
+     * card counted as a service line, which pushed the offer region up to include the earnings-chip
+     * "R$ 0,00" and made the parser read a zero fare. Longer alternatives precede shorter so "XL"
+     * is not consumed as "X".
+     */
     val UBER_SERVICE_LINE = Regex(
-        "(?i)\\s*(?:\\d+\\s*)?(?:(?:uber\\s*)?(?:x|black|comfort|flash|xl|moto|priority)|priority|comfort)(?:\\s+exclusivo)?.*",
+        "(?i)\\s*(?:\\d+\\s*)?(?:uber\\s*)?(?:xl|x|black|comfort|flash|moto|priority)\\b.*",
     )
 
     /** Uber markers that identify the card without naming a service tier. */

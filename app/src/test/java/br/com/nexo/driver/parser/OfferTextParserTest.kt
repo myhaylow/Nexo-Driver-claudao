@@ -664,4 +664,42 @@ class OfferTextParserTest {
         assertEquals(null, attempt.offer)
         assertEquals(null, attempt.unrecognizedLayoutSource)
     }
+
+    @Test
+    fun `a neighbourhood starting with a service letter does not steal the payout`() {
+        // Reproduces a live OCR read of a dark Uber card: the neighbourhood "Xaxim" sits at the top
+        // and the earnings chip shows "R$ 0,00", above the real fare. The service-line regex used
+        // to match "Xaxim", dragging the R$ 0,00 into the payout region so the parser read a zero.
+        val offer = registry.parse(
+            RawOfferText(
+                text = """
+                    Xaxim
+                    Uber R$ 0,00
+                    Alto Boqueirão
+                    2 UberX
+                    R$ 13,58
+                    R$ 1,29/km est.
+                    4,89 (245)
+                    3 min (1,2 km)
+                    Rua Arthur Manoel Iwersen, Curitiba
+                    19 minutos (9,3 km)
+                """.trimIndent(),
+                capturedAtEpochMs = 1L,
+                fieldSource = FieldSource.OCR,
+            ),
+        )
+
+        assertNotNull(offer)
+        assertEquals(1_358L, offer?.payout?.value?.cents)
+    }
+
+    @Test
+    fun `service tiers still match while stray words do not`() {
+        assertEquals(true, OfferLayoutSignatures.isUberServiceLine("UberX"))
+        assertEquals(true, OfferLayoutSignatures.isUberServiceLine("2 Comfort"))
+        assertEquals(true, OfferLayoutSignatures.isUberServiceLine("Priority exclusivo"))
+        assertEquals(true, OfferLayoutSignatures.isUberServiceLine("UberXL"))
+        assertEquals(false, OfferLayoutSignatures.isUberServiceLine("Xaxim"))
+        assertEquals(false, OfferLayoutSignatures.isUberServiceLine("Alto Boqueirão"))
+    }
 }

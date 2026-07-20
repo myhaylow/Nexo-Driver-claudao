@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import br.com.nexo.driver.ui.theme.DriverInteligenteTheme
 import br.com.nexo.driver.ui.theme.DriverThemeMode
+import br.com.nexo.driver.ui.theme.DriverVisualStyle
 import br.com.nexo.driver.speech.OfferDecisionSpeaker
 import br.com.nexo.driver.overlay.preferences.OverlayMetricField
 
@@ -25,7 +26,10 @@ class OverlayVisualTestActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            DriverInteligenteTheme(mode = DriverThemeMode.LIGHT) {
+            // Pinned to the neon identity so the rendering test's exact-colour check is
+            // deterministic; the app-wide default is a different style, but this harness only needs
+            // a fixed, known palette to assert against.
+            DriverInteligenteTheme(mode = DriverThemeMode.LIGHT, visualStyle = DriverVisualStyle.CURRENT) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -77,10 +81,11 @@ private fun acceptedUberFixtureModel() = OfferOverlayUiModel(
     netProfit = OverlayMetricUi("R$ 10,20", OverlayStatus.ACCEPT),
     netProfitPercent = OverlayMetricUi("75%", OverlayStatus.ACCEPT),
     netProfitPerHour = OverlayMetricUi("R$ 27,82", OverlayStatus.ANALYZE),
+    // The default grid, matching what the rendering test asserts is visible.
     gridFields = listOf(
         OverlayMetricField.RATE_PER_KM,
+        OverlayMetricField.RATE_PER_HOUR,
+        OverlayMetricField.PASSENGER_RATING,
         OverlayMetricField.NET_PROFIT,
-        OverlayMetricField.NET_PROFIT_PERCENT,
-        OverlayMetricField.NET_PROFIT_PER_HOUR,
     ),
 )
