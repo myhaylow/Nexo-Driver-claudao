@@ -61,7 +61,6 @@ internal object OcrLineSanitizer {
         "mnin" to "min",
         "rnin" to "min",
         "mim" to "min",
-        "rnin" to "min",
         "kn1" to "km",
         "krn" to "km",
     )
@@ -78,7 +77,10 @@ internal object OcrLineSanitizer {
 
     /** "12,3km" and "5min" get the separating space the leg regex tolerates but reads better with. */
     private fun normalizeUnitSpacing(line: String): String =
-        Regex("(?i)(\\d)(km|min)\\b").replace(line) { match ->
+        UNIT_SPACING.replace(line) { match ->
             "${match.groupValues[1]} ${match.groupValues[2].lowercase()}"
         }
+
+    // Compiled once: sanitize() runs per OCR line, per frame.
+    private val UNIT_SPACING = Regex("(?i)(\\d)(km|min)\\b")
 }

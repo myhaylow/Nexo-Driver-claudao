@@ -391,33 +391,8 @@ private fun <T> ChoiceGroup(
     }
 }
 
-@Composable
-private fun FontPreview() {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Text(
-                text = "Prévia",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = "R$ 2,18/km",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-            Text(
-                text = "Valor por quilômetro da corrida",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
-        }
-    }
-}
+// FontPreview was defined here but never rendered by any screen or @Preview, so nothing exercised
+// it and nothing would have caught it breaking.
 
 @Preview(showBackground = true)
 @Composable

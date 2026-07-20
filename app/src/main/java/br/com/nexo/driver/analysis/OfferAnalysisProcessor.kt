@@ -32,6 +32,7 @@ import br.com.nexo.driver.cost.NetProfitCalculator
 import br.com.nexo.driver.overlay.OverlayStatus
 import br.com.nexo.driver.speech.OfferDecisionSpeaker
 import br.com.nexo.driver.speech.SharedPreferencesSpeechSettingsStore
+import br.com.nexo.driver.ui.settings.AppSettings
 import br.com.nexo.driver.ui.settings.AppSettingsStore
 import br.com.nexo.driver.ui.theme.ColorVisionScheme
 import br.com.nexo.driver.ui.theme.DriverThemeMode
@@ -61,7 +62,17 @@ class OfferAnalysisProcessor(
         OfferDestinationGeocoder(GeocoderDestinationResolver(appContext))
     }
     private val supermarketBlocklistLoader by lazy { SupermarketBlocklistLoader(appContext) }
+
+    // These are read once per offer on the capture path. Each `create(appContext)` allocates a
+    // wrapper and re-resolves the SharedPreferences handle, so they are held rather than rebuilt
+    // per frame; the stores themselves are stateless readers over the same preference files.
     private val appSettingsStore by lazy { AppSettingsStore.create(appContext) }
+    private val profileStore by lazy { SharedPreferencesProfileStore.create(appContext) }
+    private val overlayPreferenceStore by lazy { SharedPreferencesOverlayPreferenceStore.create(appContext) }
+    private val fuelSettingsStore by lazy { SharedPreferencesFuelSettingsStore.create(appContext) }
+    private val speechSettingsStore by lazy { SharedPreferencesSpeechSettingsStore.create(appContext) }
+    private val blockSettingsStore by lazy { SharedPreferencesBlockSettingsStore.create(appContext) }
+    private val destinationStore by lazy { SharedPreferencesDriverDestinationStore.create(appContext) }
 
     init {
         val migration = appContext.getSharedPreferences(PRIVACY_MIGRATION_PREFERENCES, Context.MODE_PRIVATE)
@@ -81,11 +92,14 @@ class OfferAnalysisProcessor(
     ): OfferAnalysisResult? {
         val destinationEnriched = currentDestinationOfferEnricher()?.enrich(offer) ?: offer.withUnknownHomeMatch()
         val enrichedOffer = destinationEnriched.withBlocklistMatch()
-        val evaluator = currentEvaluator()
-        val profile = SharedPreferencesProfileStore.create(appContext).load().activeProfile
+        // Read once and shared by the evaluator thresholds and the overlay appearance below;
+        // these used to be two independent loads of the same seven keys per offer.
+        val appSettings = appSettingsStore.load()
+        val evaluator = evaluatorFor(appSettings)
+        val profile = profileStore.load().activeProfile
         val rules = profile?.takeIf { it.isEnabled }?.rules.orEmpty() + blocklistRule(enrichedOffer)
-        val overlayPreferences = SharedPreferencesOverlayPreferenceStore.create(appContext).load()
-        val fuelSettings = SharedPreferencesFuelSettingsStore.create(appContext).load()
+        val overlayPreferences = overlayPreferenceStore.load()
+        val fuelSettings = fuelSettingsStore.load()
         val derived = evaluator.derive(enrichedOffer)
         val profitConfidence = minOf(enrichedOffer.payout.score, derived.totalDistance.score)
         val profitEstimate = NetProfitCalculator(fuelSettings).estimate(
@@ -128,7 +142,7 @@ class OfferAnalysisProcessor(
         } else {
             baseOverlay
         }
-        val settings = SharedPreferencesSpeechSettingsStore.create(appContext).load()
+        val settings = speechSettingsStore.load()
 
         if (allowSideEffects) {
             OfferSessionMetricsRepository.record(enrichedOffer)
@@ -140,7 +154,7 @@ class OfferAnalysisProcessor(
         return OfferAnalysisResult(
             offer = enrichedOffer,
             overlay = overlay,
-            appearance = currentOverlayAppearance(),
+            appearance = overlayAppearanceFor(appSettings),
         )
     }
 
@@ -152,7 +166,7 @@ class OfferAnalysisProcessor(
      * what is displayed and spoken — it never automates accepting or refusing.
      */
     private fun NormalizedOffer.withBlocklistMatch(): NormalizedOffer {
-        val blockEnabled = SharedPreferencesBlockSettingsStore.create(appContext).load().blockSupermarkets
+        val blockEnabled = blockSettingsStore.load().blockSupermarkets
         if (!blockEnabled) return this
         val pickup = pickup.location.value
         val match = supermarketBlocklistLoader.load().matchPickup(pickup?.coordinate, pickup?.address)
@@ -206,7 +220,7 @@ class OfferAnalysisProcessor(
      * thread, so disk I/O can never delay the first overlay.
      */
     private fun currentDestinationOfferEnricher(): DestinationOfferEnricher? = runCatching {
-        val destination = SharedPreferencesDriverDestinationStore.create(appContext).load() ?: return null
+        val destination = destinationStore.load() ?: return null
         val selectedPackage = offlinePackageStore.load()
         val key = selectedPackage?.cacheKey()
         val resolver = cachedOfflineResolver.takeIf { key != null && cachedOfflineKey == key }
@@ -276,20 +290,16 @@ class OfferAnalysisProcessor(
         )
     }
 
-    private fun currentOverlayAppearance(): OverlayAppearance {
-        val settings = appSettingsStore.load()
-        return OverlayAppearance(
-            themeMode = settings.themeMode,
-            fontScale = settings.fontScale.multiplier,
-            visualStyle = settings.visualStyle,
-            colorVisionScheme = settings.colorVisionScheme,
-            cardDurationMs = settings.cardDurationMs,
-        )
-    }
+    private fun overlayAppearanceFor(settings: AppSettings) = OverlayAppearance(
+        themeMode = settings.themeMode,
+        fontScale = settings.fontScale.multiplier,
+        visualStyle = settings.visualStyle,
+        colorVisionScheme = settings.colorVisionScheme,
+        cardDurationMs = settings.cardDurationMs,
+    )
 
     /** User-tunable decision thresholds, mirroring what comparable apps expose as good/bad bands. */
-    private fun currentEvaluator(): OfferEvaluator {
-        val settings = appSettingsStore.load()
+    private fun evaluatorFor(settings: AppSettings): OfferEvaluator {
         if (
             settings.acceptThreshold == DEFAULT_ACCEPT_THRESHOLD &&
             settings.analyzeThreshold == DEFAULT_ANALYZE_THRESHOLD
@@ -303,14 +313,9 @@ class OfferAnalysisProcessor(
     }
 
     private companion object {
-        private const val APP_SETTINGS_PREFERENCES = "driver_inteligente_app_settings"
-        private const val KEY_THEME_MODE = "theme_mode"
-        private const val KEY_VISUAL_STYLE = "visual_style"
-        private const val KEY_FONT_SCALE = "font_scale"
-        private const val KEY_COLOR_VISION = "color_vision_scheme"
-        private const val KEY_CARD_DURATION_MS = "overlay_card_duration_ms"
-        private const val KEY_ACCEPT_THRESHOLD = "decision_accept_threshold"
-        private const val KEY_ANALYZE_THRESHOLD = "decision_analyze_threshold"
+        // The app-settings preference name and its seven key strings now live only in
+        // AppSettingsStore. Leaving byte-identical copies here was the exact hazard that store was
+        // introduced to remove: renaming a key in one place looks safe and silently diverges.
         private const val DEFAULT_ADDRESS_PACKAGE_BUFFER_BYTES = 16 * 1024
         private const val MAX_ADDRESS_PACKAGE_BYTES = 16 * 1024 * 1024
         private const val PRIVACY_MIGRATION_PREFERENCES = "driver_privacy_migrations"

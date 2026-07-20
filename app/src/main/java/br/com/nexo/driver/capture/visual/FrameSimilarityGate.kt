@@ -46,7 +46,17 @@ class FrameSimilarityGate(
         previous = null
     }
 
-    /** Average luminance over a [GRID]x[GRID] grid of the frame. */
+    /**
+     * Average luminance over a [GRID]x[GRID] grid, from a fixed number of probes per cell.
+     *
+     * The probe count per cell is constant rather than derived from a pixel stride. A stride walks
+     * every Nth pixel, so cost grows with frame area: on a 1080x2340 capture a 4px stride works out
+     * to roughly 165k `argbAt` calls, and each one is a single-pixel JNI crossing into
+     * `Bitmap.getPixel`. That is enough work to cost more than the OCR pass this gate exists to
+     * skip. A fixed [PROBES_PER_AXIS] grid bounds the total at [GRID]^2 * [PROBES_PER_AXIS]^2
+     * probes -- 2304 here -- regardless of resolution, which is ample for detecting that a card's
+     * text changed.
+     */
     private fun signatureOf(frame: VisualPixelFrame): IntArray? {
         if (frame.width < GRID || frame.height < GRID) return null
         val cells = IntArray(GRID * GRID)
@@ -54,17 +64,15 @@ class FrameSimilarityGate(
         val cellHeight = frame.height / GRID
         for (row in 0 until GRID) {
             for (column in 0 until GRID) {
-                var total = 0L
+                var total = 0f
                 var samples = 0
-                var y = row * cellHeight
-                while (y < (row + 1) * cellHeight) {
-                    var x = column * cellWidth
-                    while (x < (column + 1) * cellWidth) {
-                        total += luminance(frame.argbAt(x, y))
+                for (probeY in 0 until PROBES_PER_AXIS) {
+                    val y = row * cellHeight + (probeY * cellHeight) / PROBES_PER_AXIS
+                    for (probeX in 0 until PROBES_PER_AXIS) {
+                        val x = column * cellWidth + (probeX * cellWidth) / PROBES_PER_AXIS
+                        total += frame.argbAt(x, y).luminance()
                         samples += 1
-                        x += SAMPLE_STEP
                     }
-                    y += SAMPLE_STEP
                 }
                 cells[row * GRID + column] = if (samples == 0) 0 else (total / samples).toInt()
             }
@@ -80,17 +88,11 @@ class FrameSimilarityGate(
         return (total / first.size).toInt()
     }
 
-    /** Rec. 601 luma, matching the luminance-only approach used by the card detector. */
-    private fun luminance(argb: Int): Int {
-        val red = (argb shr 16) and 0xFF
-        val green = (argb shr 8) and 0xFF
-        val blue = argb and 0xFF
-        return (red * 299 + green * 587 + blue * 114) / 1000
-    }
-
     private companion object {
         const val GRID = 12
-        const val SAMPLE_STEP = 4
+
+        /** Probes per axis within each cell; total probes are GRID^2 * this^2, independent of resolution. */
+        const val PROBES_PER_AXIS = 4
 
         /**
          * Mean luminance delta, 0..255. Tuned so a moving map underneath the card stays below it

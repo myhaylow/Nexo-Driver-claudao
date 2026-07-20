@@ -38,6 +38,17 @@ data class VisualCardRegion(
 enum class VisualCardDetectionStrategy { EDGE_BANDS, FALLBACK }
 
 /**
+ * Rec. 709 luma of a packed ARGB pixel. Shared by every luminance-only consumer in this package so
+ * the card detector and the similarity gate cannot drift onto different coefficients.
+ */
+internal fun Int.luminance(): Float {
+    val red = this shr 16 and 0xff
+    val green = this shr 8 and 0xff
+    val blue = this and 0xff
+    return red * 0.2126f + green * 0.7152f + blue * 0.0722f
+}
+
+/**
  * Fast, provider-agnostic visual locator for the offer cards used by Uber and 99.
  *
  * It samples horizontal bands through the lower 12–76% of the frame. A real offer card creates
@@ -152,13 +163,6 @@ class OfferCardVisualDetector(
             confidence = 0f,
             strategy = VisualCardDetectionStrategy.FALLBACK,
         )
-    }
-
-    private fun Int.luminance(): Float {
-        val red = this shr 16 and 0xff
-        val green = this shr 8 and 0xff
-        val blue = this and 0xff
-        return red * 0.2126f + green * 0.7152f + blue * 0.0722f
     }
 
     private companion object {

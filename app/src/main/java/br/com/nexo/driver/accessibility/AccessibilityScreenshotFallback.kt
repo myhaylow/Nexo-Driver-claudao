@@ -310,8 +310,6 @@ internal class AccessibilityScreenshotFallback(
     /** Internal rather than private so the screenshot pacing policy can be asserted in tests. */
     internal companion object {
         const val TAG = "AccessibilityOcr"
-        const val CAPTURE_INTERVAL_MS = 150L
-
         /**
          * Floor between screenshot requests. The framework rejects anything faster with
          * ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT; measured on a Galaxy S23 / Android 16, a

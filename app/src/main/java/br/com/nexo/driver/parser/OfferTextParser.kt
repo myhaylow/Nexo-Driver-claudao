@@ -183,7 +183,7 @@ private fun parseCommon(
     } ?: unknownLeg()
     val profile = lines.firstOrNull { it.contains("perfil", ignoreCase = true) }
     val serviceType = lines.firstOrNull(::isUberServiceLine)
-        ?: lines.firstOrNull { it.matches(Regex("(?i)(99pop|99plus).*")) }
+        ?: lines.firstOrNull { it.matches(NINETY_NINE_SERVICE_REGEX) }
     val stopCount = parseStopCount(lines)
     val explicitlyLongTrip = lines.any(::hasExplicitLongTripLabel)
     val longTripHint = when {
@@ -318,7 +318,7 @@ private fun hasSecondaryMoneyLabel(line: String): Boolean {
 private fun isUberServiceLine(line: String): Boolean = OfferLayoutSignatures.isUberServiceLine(line)
 
 private fun parseLeg(line: String): OfferLeg? {
-    val match = Regex("(?i)\\(?\\s*(\\d+)\\s*(?:min|minutos)\\b.*?(?:\\(\\s*)?([\\d.,]+)\\s*km\\s*\\)?").find(line) ?: return null
+    val match = LEG_REGEX.find(line) ?: return null
     val minutes = match.groupValues[1].toLongOrNull() ?: return null
     val kilometres = parseDecimalKilometres(match.groupValues[2]) ?: return null
     val inlineAddress = line
@@ -367,6 +367,29 @@ private fun canJoinAsSplitLeg(first: String, second: String): Boolean =
 private val LEG_DURATION_ONLY_REGEX = OfferLayoutSignatures.LEG_DURATION_ONLY
 private val LEG_DISTANCE_ONLY_REGEX = OfferLayoutSignatures.LEG_DISTANCE_ONLY
 
+// Kotlin's Regex(...) compiles a fresh Pattern on every construction and caches nothing, so any
+// literal built inside these helpers recompiles once per line of every card, on a path with a
+// one-second capture-to-overlay budget. They are hoisted here instead.
+private val NINETY_NINE_SERVICE_REGEX = Regex("(?i)(99pop|99plus).*")
+private val STANDALONE_MONEY_REGEX = Regex("(?i)\\s*r\\$\\s*[\\d.]+(?:,[\\d]{1,2})?\\s*")
+private val LEG_REGEX = Regex("(?i)\\(?\\s*(\\d+)\\s*(?:min|minutos)\\b.*?(?:\\(\\s*)?([\\d.,]+)\\s*km\\s*\\)?")
+private val MONEY_REGEX = Regex("(?i)(?:r\\$|brl|us\\$|usd|\\$|eur|€)\\s*([\\d.]+(?:[,.][\\d]{1,2})?)")
+private val RATING_SIGNAL_REGEX =
+    Regex("(?:★|⭐|\\*|\\bstar\\b|\\b(?:corrida|corridas|viagem|viagens)\\b)", RegexOption.IGNORE_CASE)
+private val RATING_WITH_COUNT_REGEX = Regex("[0-5][,.][0-9]{1,2}\\s*\\(\\s*[+\\d.,]+\\s*\\)")
+private val RATING_VALUE_REGEX = Regex(
+    "(?:★|⭐|\\bstar\\b)\\s*([0-5][,.][0-9]{1,2})|([0-5][,.][0-9]{1,2})\\s*(?:★|⭐)|(?<![R$\\d])([0-5][,.][0-9]{1,2})(?![\\d])",
+)
+private val STOPS_ADDITIONAL_NUMBERED_REGEX =
+    Regex("\\b(\\d+)\\s*(?:parada|paradas|stop|stops)\\s*(?:adicional|adicionais|additional)\\b")
+private val STOPS_NUMBERED_REGEX = Regex("\\b(\\d+)\\s*(?:parada|paradas|stop|stops)\\b")
+private val STOPS_MULTIPLE_REGEX = Regex("\\b(?:multiplas|multiple)\\s+(?:paradas|stops)\\b")
+private val STOPS_ADDITIONAL_REGEX = Regex("\\b(?:parada|paradas|stop|stops)\\s+(?:adicional|adicionais|additional)\\b")
+private val LONG_TRIP_REGEX = Regex("\\b(?:viagem|corrida)\\s+longa\\b|\\blong\\s+trip\\b|\\blong-distance\\s+(?:trip|ride)\\b")
+private val COMBINING_MARKS_REGEX = Regex("\\p{Mn}+")
+private val TRIP_COUNT_REGEX = Regex("(?i)(\\d[\\d.]*)\\s*corridas?")
+private val PARENTHESISED_COUNT_REGEX = Regex("\\(\\s*(\\d[\\d.]*)\\s*\\)")
+
 /** ML Kit may recognize the decimal separator as either comma or dot in pt-BR screenshots. */
 private fun parseDecimalKilometres(token: String): Double? {
     val compact = token.replace(" ", "")
@@ -389,7 +412,7 @@ private fun locationLineAfterLeg(lines: List<String>, index: Int): String? = lin
     ?.takeUnless { parseLeg(it) != null }
 
 private fun parseAllMoney(text: String): List<Money> =
-    Regex("(?i)(?:r\\$|brl|us\\$|usd|\\$|eur|€)\\s*([\\d.]+(?:[,.][\\d]{1,2})?)")
+    MONEY_REGEX
         .findAll(text)
         .mapNotNull { match -> moneyFromToken(match.groupValues[1]) }
         .toList()
@@ -413,12 +436,12 @@ private fun parseRating(text: String): Long? {
     // OCR can merge "4,96 (163)" and the following "+R$ 5,25 incluído"
     // into one line. Rating semantics live before the monetary suffix.
     val ratingText = text.substringBefore("R$", missingDelimiterValue = text)
-    val hasRatingSignal = Regex("(?:★|⭐|\\*|\\bstar\\b|\\b(?:corrida|corridas|viagem|viagens)\\b)", RegexOption.IGNORE_CASE)
+    val hasRatingSignal = RATING_SIGNAL_REGEX
         .containsMatchIn(ratingText) ||
-        Regex("[0-5][,.][0-9]{1,2}\\s*\\(\\s*[+\\d.,]+\\s*\\)").containsMatchIn(ratingText)
+        RATING_WITH_COUNT_REGEX.containsMatchIn(ratingText)
     // A bare decimal is also used by route legs (for example, "5 min (1,6 km)").
     if (!hasRatingSignal) return null
-    val match = Regex("(?:★|⭐|\\bstar\\b)\\s*([0-5][,.][0-9]{1,2})|([0-5][,.][0-9]{1,2})\\s*(?:★|⭐)|(?<![R$\\d])([0-5][,.][0-9]{1,2})(?![\\d])").find(ratingText) ?: return null
+    val match = RATING_VALUE_REGEX.find(ratingText) ?: return null
     val value = match.groupValues.drop(1).firstOrNull { it.isNotBlank() }
         ?.replace(',', '.')
         ?.toBigDecimalOrNull()
@@ -445,7 +468,7 @@ private fun parseStopCount(lines: List<String>): Long? = lines.firstNotNullOfOrN
  */
 private fun parseStopCount(line: String): Long? {
     val normalized = line.foldedForMatching()
-    val additional = Regex("\\b(\\d+)\\s*(?:parada|paradas|stop|stops)\\s*(?:adicional|adicionais|additional)\\b")
+    val additional = STOPS_ADDITIONAL_NUMBERED_REGEX
         .find(normalized)
         ?.groupValues
         ?.get(1)
@@ -459,21 +482,21 @@ private fun parseStopCount(line: String): Long? {
         ?.toLongOrNull()
         ?.let { return it }
 
-    val explicitMultiple = Regex("\\b(?:multiplas|multiple)\\s+(?:paradas|stops)\\b").containsMatchIn(normalized)
-    val unnumberedAdditional = Regex("\\b(?:parada|paradas|stop|stops)\\s+(?:adicional|adicionais|additional)\\b")
+    val explicitMultiple = STOPS_MULTIPLE_REGEX.containsMatchIn(normalized)
+    val unnumberedAdditional = STOPS_ADDITIONAL_REGEX
         .containsMatchIn(normalized)
     return if (explicitMultiple || unnumberedAdditional) 2L else null
 }
 
 private fun hasExplicitLongTripLabel(line: String): Boolean {
     val normalized = line.foldedForMatching()
-    return Regex("\\b(?:viagem|corrida)\\s+longa\\b|\\blong\\s+trip\\b|\\blong-distance\\s+(?:trip|ride)\\b")
+    return LONG_TRIP_REGEX
         .containsMatchIn(normalized)
 }
 
 private fun String.foldedForMatching(): String =
     java.text.Normalizer.normalize(this, java.text.Normalizer.Form.NFD)
-        .replace(Regex("\\p{Mn}+"), "")
+        .replace(COMBINING_MARKS_REGEX, "")
         .lowercase()
 
 private fun totalDuration(pickup: OfferLeg, trip: OfferLeg): Long? {
@@ -490,14 +513,14 @@ private fun totalDistance(pickup: OfferLeg, trip: OfferLeg): Long? {
 
 private fun parseTripCount(lines: List<String>): Long? {
     lines.firstNotNullOfOrNull { line ->
-        Regex("(?i)(\\d[\\d.]*)\\s*corridas?")
+        TRIP_COUNT_REGEX
             .find(line)
             ?.groupValues
             ?.get(1)
             ?.replace(".", "")
             ?.toLongOrNull()
             ?: line.takeIf { parseRating(it) != null && !it.contains("+") }
-                ?.let { Regex("\\(\\s*(\\d[\\d.]*)\\s*\\)").find(it) }
+                ?.let { PARENTHESISED_COUNT_REGEX.find(it) }
                 ?.groupValues
                 ?.get(1)
                 ?.replace(".", "")
@@ -506,7 +529,7 @@ private fun parseTripCount(lines: List<String>): Long? {
     return lines.windowed(size = 3, partialWindows = true).firstNotNullOfOrNull { window ->
         val joined = window.joinToString(" ")
         joined.takeIf { parseRating(it) != null && !it.contains("+") }
-            ?.let { Regex("\\(\\s*(\\d[\\d.]*)\\s*\\)").find(it) }
+            ?.let { PARENTHESISED_COUNT_REGEX.find(it) }
             ?.groupValues
             ?.get(1)
             ?.replace(".", "")

@@ -247,11 +247,20 @@ class DriverAccessibilityService : AccessibilityService() {
         }
     }
 
-    /** Rate-limited so a burst of window events cannot flood the log the way code=3 once did. */
-    private fun logNoReadableWindow(hint: String, rootCount: Int, windowCount: Int) {
+    /**
+     * Shared cooldown for the two "nothing to read" diagnostics. They deliberately share one clock:
+     * both fire from the same burst of window events, and rate-limiting them independently would
+     * still let the pair flood the log together.
+     */
+    private fun withinNoCardCooldown(): Boolean {
         val nowMs = SystemClock.elapsedRealtime()
-        if (nowMs - lastNoCardLogAtMs < NO_CARD_LOG_INTERVAL_MS) return
+        if (nowMs - lastNoCardLogAtMs < NO_CARD_LOG_INTERVAL_MS) return true
         lastNoCardLogAtMs = nowMs
+        return false
+    }
+
+    private fun logNoReadableWindow(hint: String, rootCount: Int, windowCount: Int) {
+        if (withinNoCardCooldown()) return
         Log.i(
             TAG,
             "LIVE no_readable_window provider=$hint roots=$rootCount windows=$windowCount " +
@@ -265,9 +274,7 @@ class DriverAccessibilityService : AccessibilityService() {
         receivedAtNanos: Long,
     ) {
         if (!BuildConfig.DEBUG || accessibilityLayoutHint(packageName) == null) return
-        val nowMs = SystemClock.elapsedRealtime()
-        if (nowMs - lastNoCardLogAtMs < NO_CARD_LOG_INTERVAL_MS) return
-        lastNoCardLogAtMs = nowMs
+        if (withinNoCardCooldown()) return
         Log.d(
             TAG,
             "LIVE no_card windows=${diagnostics.rootCount} lines=${diagnostics.textLineCount} " +

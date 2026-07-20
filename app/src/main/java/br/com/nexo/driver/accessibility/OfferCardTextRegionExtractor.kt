@@ -24,10 +24,14 @@ internal object OfferCardTextRegionExtractor {
                 lines.indices.filter { index -> hasPayout(lines[index]) }
             }
         }
+        // routeLegCount is the expensive part of both the completeness test and the score, so it is
+        // computed once per candidate window and carried, rather than rescanned by each.
         return candidates
             .map { start -> cardWindow(lines, start) }
-            .filter(::isCompleteOfferCard)
-            .maxByOrNull(::cardScore)
+            .map { window -> window to routeLegCount(window) }
+            .filter { (window, legs) -> legs >= REQUIRED_ROUTE_LEGS && window.any(::hasPayout) }
+            .maxByOrNull { (window, legs) -> cardScore(window, legs) }
+            ?.first
     }
 
     private fun cardWindow(lines: List<String>, start: Int): List<String> {
@@ -36,11 +40,8 @@ internal object OfferCardTextRegionExtractor {
         return if (actionIndex >= 0) bounded.take(actionIndex + 1) else bounded
     }
 
-    private fun isCompleteOfferCard(lines: List<String>): Boolean =
-        lines.any(::hasPayout) && routeLegCount(lines) >= REQUIRED_ROUTE_LEGS
-
-    private fun cardScore(lines: List<String>): Int =
-        routeLegCount(lines) * 10 +
+    private fun cardScore(lines: List<String>, routeLegs: Int): Int =
+        routeLegs * 10 +
             lines.count(::hasPayout) * 4 +
             lines.count(::hasRatingSignal) * 2 +
             lines.count(::isTerminalAction)
