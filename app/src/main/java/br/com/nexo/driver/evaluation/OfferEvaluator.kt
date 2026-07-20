@@ -18,35 +18,106 @@ const val DEFAULT_ANALYZE_THRESHOLD = 50
  */
 const val DEFAULT_MINIMUM_COVERAGE_PERCENT = 40
 
-enum class Metric(val label: String) {
-    PAYOUT("Valor"),
-    RATE_PER_KM("R$/km"),
-    RATE_PER_HOUR("R$/h"),
-    RATE_PER_MINUTE("R$/min"),
-    NET_PROFIT("Lucro"),
-    NET_PROFIT_PERCENT("Lucro %"),
-    NET_PROFIT_PER_HOUR("Lucro/h"),
-    PICKUP_DISTANCE("Dist. retirada"),
-    PICKUP_DURATION("Tempo retirada"),
-    TRIP_DISTANCE("Dist. viagem"),
-    TRIP_DURATION("Tempo viagem"),
-    TOTAL_DISTANCE("Dist. total"),
-    TOTAL_DURATION("Tempo total"),
-    PASSENGER_RATING("Avaliação"),
-    HAS_MULTIPLE_STOPS("Paradas"),
-    IS_LONG_TRIP("Viagem longa"),
-    IS_TOWARD_DESTINATION("Sentido destino"),
-    ENDS_NEAR_HOME("Termina perto de casa"),
-    /** Set by the blocklist enricher so a blocked pickup is decided by the engine, not post-hoc. */
-    PICKUP_IS_BLOCKED("Local bloqueado"),
-    ;
+/**
+ * How a metric's raw [Long] value relates to what a driver reads and types.
+ *
+ * Every metric is stored as a scaled integer (cents, metres, seconds, rating x100) so the engine
+ * never touches floating point. That scale, the unit symbol, and the input precision are three
+ * facets of one fact, and they were previously re-derived independently in four places — the
+ * tolerance default, the overlay's reason line, the filter list, and the rule editor's
+ * parse/format pair. Keeping them together means a new metric cannot be half-taught its own unit.
+ */
+enum class MetricUnit(
+    val symbol: String,
+    /** Multiplier between the displayed number and the stored value. */
+    val scale: Long,
+    /** Fraction digits offered when the driver types a target. */
+    val inputFractionDigits: Int,
+    val isNumeric: Boolean = true,
+) {
+    MONEY_CENTS(symbol = "R$", scale = 100L, inputFractionDigits = 2),
+    PERCENT_SCALED(symbol = "%", scale = 100L, inputFractionDigits = 0),
+    DISTANCE_METERS(symbol = "km", scale = 1_000L, inputFractionDigits = 1),
+    DURATION_SECONDS(symbol = "min", scale = 60L, inputFractionDigits = 1),
+    RATING_SCALED(symbol = "★", scale = 100L, inputFractionDigits = 2),
 
+    /** A yes/no signal: it has no target to type and no unit to render. */
+    FLAG(symbol = "", scale = 1L, inputFractionDigits = 0, isNumeric = false),
+}
+
+/** Grouping used to organise the filter screen. */
+enum class MetricGroup { EARNINGS, PICKUP, TRIP, PREFERENCES }
+
+/**
+ * Everything the app needs to know about a metric travels with the metric.
+ *
+ * Adding a metric used to mean editing roughly fifteen exhaustive `when` expressions spread over
+ * the evaluator, the overlay presenter and four filter screens — with the compiler only catching
+ * the ones that were exhaustive, and silent `else` branches swallowing the rest. Now a new entry
+ * declares its own label, unit and placement, and every consumer reads those properties.
+ *
+ * @param label short form, used where space is tight (overlay reason line, profile summary).
+ * @param displayName full form, used as a heading in the filter screens.
+ */
+enum class Metric(
+    val label: String,
+    val displayName: String,
+    val unit: MetricUnit,
+    val group: MetricGroup,
+    val order: Int,
     /**
-     * False for metrics the engine maintains itself. [PICKUP_IS_BLOCKED] is driven by the
+     * False for signals the engine maintains itself. [PICKUP_IS_BLOCKED] is driven by the
      * blocklist toggle in settings, so offering it a second time as a hand-editable filter rule
      * would let the two disagree.
      */
-    val isUserConfigurable: Boolean get() = this != PICKUP_IS_BLOCKED
+    val isUserConfigurable: Boolean = true,
+    /**
+     * Near-threshold band in the metric's own stored unit, for metrics where a percentage band is
+     * meaningless. 10% under a 4.70 rating target reaches 4.23, which is not "almost passing".
+     */
+    val defaultToleranceAbsolute: Long? = null,
+) {
+    PAYOUT("Valor", "Pagamento total", MetricUnit.MONEY_CENTS, MetricGroup.EARNINGS, 0),
+    RATE_PER_HOUR("R$/h", "Valor por hora", MetricUnit.MONEY_CENTS, MetricGroup.EARNINGS, 1),
+    RATE_PER_MINUTE("R$/min", "Valor por minuto", MetricUnit.MONEY_CENTS, MetricGroup.EARNINGS, 2),
+    RATE_PER_KM("R$/km", "Valor por km", MetricUnit.MONEY_CENTS, MetricGroup.EARNINGS, 3),
+    NET_PROFIT("Lucro", "Lucro líquido", MetricUnit.MONEY_CENTS, MetricGroup.EARNINGS, 4),
+    NET_PROFIT_PERCENT("Lucro %", "Lucro percentual", MetricUnit.PERCENT_SCALED, MetricGroup.EARNINGS, 5),
+    NET_PROFIT_PER_HOUR("Lucro/h", "Lucro por hora", MetricUnit.MONEY_CENTS, MetricGroup.EARNINGS, 6),
+
+    PICKUP_DURATION("Tempo retirada", "Tempo de retirada", MetricUnit.DURATION_SECONDS, MetricGroup.PICKUP, 0),
+    PICKUP_DISTANCE("Dist. retirada", "Distância de retirada", MetricUnit.DISTANCE_METERS, MetricGroup.PICKUP, 1),
+
+    TRIP_DURATION("Tempo viagem", "Tempo de viagem", MetricUnit.DURATION_SECONDS, MetricGroup.TRIP, 0),
+    TOTAL_DURATION("Tempo total", "Tempo total", MetricUnit.DURATION_SECONDS, MetricGroup.TRIP, 1),
+    TRIP_DISTANCE("Dist. viagem", "Distância da viagem", MetricUnit.DISTANCE_METERS, MetricGroup.TRIP, 2),
+    TOTAL_DISTANCE("Dist. total", "Distância total", MetricUnit.DISTANCE_METERS, MetricGroup.TRIP, 3),
+
+    PASSENGER_RATING(
+        "Avaliação",
+        "Nota do passageiro",
+        MetricUnit.RATING_SCALED,
+        MetricGroup.PREFERENCES,
+        0,
+        // Ratings are stored scaled by 100, so this is +/-0.05 stars.
+        defaultToleranceAbsolute = 5L,
+    ),
+    HAS_MULTIPLE_STOPS("Paradas", "Múltiplas paradas", MetricUnit.FLAG, MetricGroup.PREFERENCES, 1),
+    IS_LONG_TRIP("Viagem longa", "Viagem longa", MetricUnit.FLAG, MetricGroup.PREFERENCES, 2),
+    IS_TOWARD_DESTINATION("Sentido destino", "Aproxima da casa", MetricUnit.FLAG, MetricGroup.PREFERENCES, 3),
+    // Previously shared order 3 with IS_TOWARD_DESTINATION, which left the filter list's sort
+    // unstable: the two could swap places between recompositions with nothing to explain it.
+    ENDS_NEAR_HOME("Termina perto de casa", "Destino próximo de casa", MetricUnit.FLAG, MetricGroup.PREFERENCES, 4),
+
+    /** Set by the blocklist enricher so a blocked pickup is decided by the engine, not post-hoc. */
+    PICKUP_IS_BLOCKED(
+        "Local bloqueado",
+        "Local bloqueado",
+        MetricUnit.FLAG,
+        MetricGroup.PREFERENCES,
+        5,
+        isUserConfigurable = false,
+    ),
 }
 
 enum class Comparator { AT_LEAST, AT_MOST, IS_TRUE, IS_FALSE }
@@ -81,16 +152,8 @@ data class FilterRule(
         }
     }
 
-    /** Default absolute bands for metrics where a percentage band is not meaningful. */
-    internal fun effectiveToleranceAbsolute(): Long? = toleranceAbsolute ?: when (metric) {
-        Metric.PASSENGER_RATING -> DEFAULT_RATING_TOLERANCE
-        else -> null
-    }
-
-    private companion object {
-        /** Ratings are stored scaled by 100, so this is ±0.05 stars. */
-        const val DEFAULT_RATING_TOLERANCE = 5L
-    }
+    /** An explicit band wins; otherwise the metric's own default applies. */
+    internal fun effectiveToleranceAbsolute(): Long? = toleranceAbsolute ?: metric.defaultToleranceAbsolute
 }
 
 data class MetricEvaluation(

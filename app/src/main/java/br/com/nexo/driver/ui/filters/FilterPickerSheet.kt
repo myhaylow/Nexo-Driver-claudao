@@ -50,8 +50,8 @@ fun FilterPickerSheet(
                             .clickable { onSelect(metric.defaultRule(comparator)) }
                             .padding(vertical = 14.dp),
                     ) {
-                        Text(metric.pickerLabel(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text(comparator.pickerLabel(), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(metric.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text(comparator.displayName, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     HorizontalDivider()
                 }
@@ -60,11 +60,20 @@ fun FilterPickerSheet(
     }
 }
 
-private fun Metric.availableComparators(): List<Comparator> = when (this) {
-    Metric.HAS_MULTIPLE_STOPS,
-    Metric.IS_LONG_TRIP,
-    Metric.ENDS_NEAR_HOME -> listOf(Comparator.IS_TRUE, Comparator.IS_FALSE)
-    else -> listOf(Comparator.AT_LEAST, Comparator.AT_MOST)
+/**
+ * Which comparators the metric can even express. This follows from the unit: a flag is yes/no, a
+ * measured value takes a bound.
+ *
+ * The previous version listed the flag metrics by hand and sent everything else to AT_LEAST /
+ * AT_MOST, so any flag missing from that list would have been offered a numeric bound it cannot
+ * satisfy -- FilterRule requires a non-null target for AT_LEAST/AT_MOST and would have thrown.
+ * IS_TOWARD_DESTINATION was in exactly that state and only escaped because the picker filters it
+ * out one line above.
+ */
+private fun Metric.availableComparators(): List<Comparator> = if (unit.isNumeric) {
+    listOf(Comparator.AT_LEAST, Comparator.AT_MOST)
+} else {
+    listOf(Comparator.IS_TRUE, Comparator.IS_FALSE)
 }
 
 private fun Metric.defaultRule(comparator: Comparator): FilterRule = FilterRule(
@@ -87,31 +96,10 @@ private fun Metric.defaultTarget(): Long? = when (this) {
     else -> null
 }
 
-private fun Metric.pickerLabel(): String = when (this) {
-    Metric.PAYOUT -> "Pagamento total"
-    Metric.RATE_PER_KM -> "Valor por km"
-    Metric.RATE_PER_HOUR -> "Valor por hora"
-    Metric.RATE_PER_MINUTE -> "Valor por minuto"
-    Metric.NET_PROFIT -> "Lucro líquido"
-    Metric.NET_PROFIT_PERCENT -> "Lucro percentual"
-    Metric.NET_PROFIT_PER_HOUR -> "Lucro por hora"
-    Metric.PICKUP_DISTANCE -> "Distância de retirada"
-    Metric.PICKUP_DURATION -> "Tempo de retirada"
-    Metric.TRIP_DISTANCE -> "Distância da viagem"
-    Metric.TRIP_DURATION -> "Tempo de viagem"
-    Metric.TOTAL_DISTANCE -> "Distância total"
-    Metric.TOTAL_DURATION -> "Tempo total"
-    Metric.PASSENGER_RATING -> "Nota do passageiro"
-    Metric.HAS_MULTIPLE_STOPS -> "Múltiplas paradas"
-    Metric.IS_LONG_TRIP -> "Viagem longa"
-    Metric.IS_TOWARD_DESTINATION -> "Aproxima da casa"
-    Metric.ENDS_NEAR_HOME -> "Destino próximo de casa"
-    Metric.PICKUP_IS_BLOCKED -> "Local bloqueado"
-}
-
-private fun Comparator.pickerLabel(): String = when (this) {
-    Comparator.AT_LEAST -> "No mínimo"
-    Comparator.AT_MOST -> "No máximo"
-    Comparator.IS_TRUE -> "Deve possuir"
-    Comparator.IS_FALSE -> "Não deve possuir"
-}
+private val Comparator.displayName: String
+    get() = when (this) {
+        Comparator.AT_LEAST -> "No mínimo"
+        Comparator.AT_MOST -> "No máximo"
+        Comparator.IS_TRUE -> "Deve possuir"
+        Comparator.IS_FALSE -> "Não deve possuir"
+    }

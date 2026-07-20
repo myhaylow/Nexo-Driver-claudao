@@ -5,6 +5,7 @@ import br.com.nexo.driver.cost.NetProfitCalculator
 import br.com.nexo.driver.evaluation.EvaluationResult
 import br.com.nexo.driver.evaluation.Metric
 import br.com.nexo.driver.evaluation.MetricStatus
+import br.com.nexo.driver.evaluation.MetricUnit
 import br.com.nexo.driver.evaluation.OfferDecision
 import br.com.nexo.driver.evaluation.OfferEvaluator
 import br.com.nexo.driver.offer.Confidence
@@ -147,16 +148,14 @@ class OfferOverlayPresenter(
         }
     }
 
-    /** Formats a raw metric value using the unit the evaluator stores it in. */
-    private fun Metric.formatValue(raw: Long): String = when (this) {
-        Metric.PAYOUT, Metric.RATE_PER_KM, Metric.RATE_PER_HOUR, Metric.RATE_PER_MINUTE,
-        Metric.NET_PROFIT, Metric.NET_PROFIT_PER_HOUR -> raw.formatBrl()
-        Metric.NET_PROFIT_PERCENT -> raw.formatPercent()
-        Metric.PICKUP_DISTANCE, Metric.TRIP_DISTANCE, Metric.TOTAL_DISTANCE -> raw.formatDistance()
-        Metric.PICKUP_DURATION, Metric.TRIP_DURATION, Metric.TOTAL_DURATION -> raw.formatDuration()
-        Metric.PASSENGER_RATING -> raw.formatRating()
-        Metric.HAS_MULTIPLE_STOPS, Metric.IS_LONG_TRIP, Metric.IS_TOWARD_DESTINATION,
-        Metric.ENDS_NEAR_HOME, Metric.PICKUP_IS_BLOCKED -> if (raw == 1L) "sim" else "não"
+    /** Formats a raw metric value using the unit the metric itself declares. */
+    private fun Metric.formatValue(raw: Long): String = when (unit) {
+        MetricUnit.MONEY_CENTS -> raw.formatBrl()
+        MetricUnit.PERCENT_SCALED -> raw.formatPercent()
+        MetricUnit.DISTANCE_METERS -> raw.formatDistance()
+        MetricUnit.DURATION_SECONDS -> raw.formatDuration()
+        MetricUnit.RATING_SCALED -> raw.formatRating()
+        MetricUnit.FLAG -> if (raw == 1L) "sim" else "não"
     }
 
     private fun pickupStatus(result: EvaluationResult, isAvailable: Boolean): OverlayStatus = when {

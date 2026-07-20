@@ -633,34 +633,12 @@ private fun android.content.Context.isDriverAccessibilityServiceEnabled(): Boole
     return splitter.any { service -> service.equals(expected, ignoreCase = true) }
 }
 
-private fun Metric.shortLabel(): String = when (this) {
-    Metric.PAYOUT -> "Pagamento"
-    Metric.RATE_PER_KM -> "R$/km"
-    Metric.RATE_PER_HOUR -> "R$/h"
-    Metric.RATE_PER_MINUTE -> "R$/min"
-    Metric.NET_PROFIT -> "Lucro"
-    Metric.NET_PROFIT_PERCENT -> "Lucro %"
-    Metric.NET_PROFIT_PER_HOUR -> "Lucro/h"
-    Metric.PICKUP_DISTANCE -> "Dist. retirada"
-    Metric.PICKUP_DURATION -> "Tempo retirada"
-    Metric.TRIP_DISTANCE -> "Dist. viagem"
-    Metric.TRIP_DURATION -> "Tempo viagem"
-    Metric.TOTAL_DISTANCE -> "Dist. total"
-    Metric.TOTAL_DURATION -> "Tempo total"
-    Metric.PASSENGER_RATING -> "Nota"
-    Metric.HAS_MULTIPLE_STOPS -> "Paradas"
-    Metric.IS_LONG_TRIP -> "Viagem longa"
-    Metric.IS_TOWARD_DESTINATION -> "Aproxima"
-    Metric.ENDS_NEAR_HOME -> "Perto de casa"
-    Metric.PICKUP_IS_BLOCKED -> "Local bloqueado"
-}
-
 private fun List<FilterRule>.conciseProfileSummary(): String {
     val enabledRules = filter(FilterRule::enabled)
     if (enabledRules.isEmpty()) return "Sem filtros ativos"
     val labels = enabledRules
         .take(3)
-        .joinToString(" · ") { it.metric.shortLabel() }
+        .joinToString(" · ") { it.metric.label }
     val remaining = enabledRules.size - 3
     return if (remaining > 0) "$labels · +$remaining" else labels
 }

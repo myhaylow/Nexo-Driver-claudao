@@ -37,6 +37,7 @@ import br.com.nexo.driver.evaluation.Comparator
 import br.com.nexo.driver.evaluation.EvaluationMode
 import br.com.nexo.driver.evaluation.FilterRule
 import br.com.nexo.driver.evaluation.Metric
+import br.com.nexo.driver.evaluation.MetricUnit
 import br.com.nexo.driver.ui.theme.DriverInteligenteTheme
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -86,7 +87,7 @@ fun FilterRuleEditorSheet(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Column {
-                Text(rule.metric.editorTitle, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text(rule.metric.displayName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = if (numericRule) "Defina como esta oferta deve ser avaliada." else "Defina quando esta condição deve valer.",
@@ -297,74 +298,10 @@ private fun RuleNumberSlider(
     }
 }
 
-private val Metric.isNumeric: Boolean
-    get() = this !in setOf(
-        Metric.HAS_MULTIPLE_STOPS,
-        Metric.IS_LONG_TRIP,
-        Metric.IS_TOWARD_DESTINATION,
-        Metric.ENDS_NEAR_HOME,
-        Metric.PICKUP_IS_BLOCKED,
-    )
+private val Metric.isNumeric: Boolean get() = unit.isNumeric
 
-private val Metric.editorTitle: String
-    get() = when (this) {
-        Metric.PAYOUT -> "Pagamento total"
-        Metric.RATE_PER_KM -> "Valor por km"
-        Metric.RATE_PER_HOUR -> "Valor por hora"
-        Metric.RATE_PER_MINUTE -> "Valor por minuto"
-        Metric.NET_PROFIT -> "Lucro líquido"
-        Metric.NET_PROFIT_PERCENT -> "Lucro percentual"
-        Metric.NET_PROFIT_PER_HOUR -> "Lucro por hora"
-        Metric.PICKUP_DISTANCE -> "Distância de retirada"
-        Metric.PICKUP_DURATION -> "Tempo de retirada"
-        Metric.TRIP_DISTANCE -> "Distância da viagem"
-        Metric.TRIP_DURATION -> "Tempo da viagem"
-        Metric.TOTAL_DISTANCE -> "Distância total"
-        Metric.TOTAL_DURATION -> "Tempo total"
-        Metric.PASSENGER_RATING -> "Nota do passageiro"
-        Metric.HAS_MULTIPLE_STOPS -> "Múltiplas paradas"
-        Metric.IS_LONG_TRIP -> "Viagem longa"
-        Metric.IS_TOWARD_DESTINATION -> "Aproxima da casa"
-        Metric.ENDS_NEAR_HOME -> "Destino próximo de casa"
-        Metric.PICKUP_IS_BLOCKED -> "Local bloqueado"
-    }
-
-private val Metric.targetLabel: String
-    get() = when (this) {
-        Metric.PAYOUT -> "Valor mínimo ou máximo"
-        Metric.RATE_PER_KM, Metric.RATE_PER_HOUR, Metric.RATE_PER_MINUTE,
-        Metric.NET_PROFIT, Metric.NET_PROFIT_PER_HOUR -> "Valor desejado"
-        Metric.NET_PROFIT_PERCENT -> "Percentual desejado"
-        Metric.PASSENGER_RATING -> "Nota desejada"
-        else -> "Limite"
-    }
-
-private val Metric.inputUnit: String
-    get() = when (this) {
-        Metric.PAYOUT, Metric.RATE_PER_KM, Metric.RATE_PER_HOUR, Metric.RATE_PER_MINUTE,
-        Metric.NET_PROFIT, Metric.NET_PROFIT_PER_HOUR -> "R$"
-        Metric.NET_PROFIT_PERCENT -> "%"
-        Metric.PICKUP_DISTANCE, Metric.TRIP_DISTANCE, Metric.TOTAL_DISTANCE -> "km"
-        Metric.PICKUP_DURATION, Metric.TRIP_DURATION, Metric.TOTAL_DURATION -> "min"
-        Metric.PASSENGER_RATING -> "★"
-        else -> ""
-    }
-
-private val Metric.targetHint: String
-    get() = when (this) {
-        Metric.PAYOUT -> "Ex.: 12,50"
-        Metric.RATE_PER_KM -> "Ex.: 1,75 por km"
-        Metric.RATE_PER_HOUR -> "Ex.: 40,00 por hora"
-        Metric.RATE_PER_MINUTE -> "Ex.: 0,70 por minuto"
-        Metric.NET_PROFIT -> "Ex.: 8,00"
-        Metric.NET_PROFIT_PERCENT -> "Ex.: 60%"
-        Metric.NET_PROFIT_PER_HOUR -> "Ex.: 30,00 por hora"
-        Metric.PICKUP_DISTANCE, Metric.TRIP_DISTANCE, Metric.TOTAL_DISTANCE -> "Ex.: 8,5 km"
-        Metric.PICKUP_DURATION, Metric.TRIP_DURATION, Metric.TOTAL_DURATION -> "Ex.: 20 minutos"
-        Metric.PASSENGER_RATING -> "Ex.: 4,80"
-        else -> ""
-    }
-
+// Flag metrics read as a sentence about the offer, so each phrases its own yes/no rather than
+// falling back to a bare "Sim"/"Não". This is genuine per-metric copy, not unit knowledge.
 private val Metric.booleanTrueLabel: String
     get() = when (this) {
         Metric.HAS_MULTIPLE_STOPS -> "Possui"
@@ -383,29 +320,40 @@ private val Metric.booleanFalseLabel: String
         else -> "Não"
     }
 
-private fun Long.toDisplayInput(metric: Metric): String = when (metric) {
-    Metric.PAYOUT, Metric.RATE_PER_KM, Metric.RATE_PER_HOUR, Metric.RATE_PER_MINUTE,
-    Metric.NET_PROFIT, Metric.NET_PROFIT_PER_HOUR -> (toDouble() / 100).formatForInput(2)
-    Metric.NET_PROFIT_PERCENT -> (toDouble() / 100).formatForInput(0)
-    Metric.PICKUP_DISTANCE, Metric.TRIP_DISTANCE, Metric.TOTAL_DISTANCE -> (toDouble() / 1_000).formatForInput(1)
-    Metric.PICKUP_DURATION, Metric.TRIP_DURATION, Metric.TOTAL_DURATION -> (toDouble() / 60).formatForInput(1)
-    Metric.PASSENGER_RATING -> (toDouble() / 100).formatForInput(2)
-    else -> ""
+/** The symbol shown as the field suffix, e.g. "R$", "km", "min". */
+private val Metric.inputUnit: String get() = unit.symbol
+
+private val Metric.targetLabel: String
+    get() = when (unit) {
+        MetricUnit.MONEY_CENTS -> "Valor desejado"
+        MetricUnit.PERCENT_SCALED -> "Percentual desejado"
+        MetricUnit.RATING_SCALED -> "Nota desejada"
+        MetricUnit.DISTANCE_METERS, MetricUnit.DURATION_SECONDS, MetricUnit.FLAG -> "Limite"
+    }
+
+private val Metric.targetHint: String
+    get() = when (unit) {
+        MetricUnit.MONEY_CENTS -> "Use vírgula para os centavos."
+        MetricUnit.PERCENT_SCALED -> "Percentual inteiro, por exemplo 60."
+        MetricUnit.DISTANCE_METERS -> "Em quilómetros, por exemplo 2,5."
+        MetricUnit.DURATION_SECONDS -> "Em minutos, por exemplo 6."
+        MetricUnit.RATING_SCALED -> "De 0 a 5, por exemplo 4,80."
+        MetricUnit.FLAG -> ""
+    }
+
+/** Stored value to the number the driver reads, using the metric's own scale. */
+private fun Long.toDisplayInput(metric: Metric): String {
+    if (!metric.unit.isNumeric) return ""
+    return (toDouble() / metric.unit.scale).formatForInput(metric.unit.inputFractionDigits)
 }
 
+/** The inverse of [toDisplayInput]; null when the text is not a usable target for this metric. */
 private fun String.toNormalizedTarget(metric: Metric): Long? {
+    if (!metric.unit.isNumeric) return null
     val number = trim().replace(',', '.').toBigDecimalOrNull() ?: return null
     if (number < BigDecimal.ZERO) return null
-    val multiplier = when (metric) {
-        Metric.PAYOUT, Metric.RATE_PER_KM, Metric.RATE_PER_HOUR, Metric.RATE_PER_MINUTE,
-        Metric.NET_PROFIT, Metric.NET_PROFIT_PERCENT, Metric.NET_PROFIT_PER_HOUR,
-        Metric.PASSENGER_RATING -> 100
-        Metric.PICKUP_DISTANCE, Metric.TRIP_DISTANCE, Metric.TOTAL_DISTANCE -> 1_000
-        Metric.PICKUP_DURATION, Metric.TRIP_DURATION, Metric.TOTAL_DURATION -> 60
-        else -> return null
-    }
     return number
-        .multiply(multiplier.toBigDecimal())
+        .multiply(metric.unit.scale.toBigDecimal())
         .setScale(0, RoundingMode.HALF_UP)
         .longValueExact()
 }

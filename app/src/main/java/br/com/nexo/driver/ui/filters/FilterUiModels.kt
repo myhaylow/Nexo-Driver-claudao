@@ -3,6 +3,8 @@ package br.com.nexo.driver.ui.filters
 import br.com.nexo.driver.evaluation.Comparator
 import br.com.nexo.driver.evaluation.FilterRule
 import br.com.nexo.driver.evaluation.Metric
+import br.com.nexo.driver.evaluation.MetricGroup
+import br.com.nexo.driver.evaluation.MetricUnit
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -68,66 +70,21 @@ fun FilterRulePresentation(rule: FilterRule): FilterRulePresentation {
     )
 }
 
+/** Section labels are UI copy; the grouping itself belongs to the metric. */
 private val Metric.section: FilterSection
-    get() = when (this) {
-        Metric.PAYOUT, Metric.RATE_PER_KM, Metric.RATE_PER_HOUR, Metric.RATE_PER_MINUTE,
-        Metric.NET_PROFIT, Metric.NET_PROFIT_PERCENT, Metric.NET_PROFIT_PER_HOUR -> FilterSection.EARNINGS
-        Metric.PICKUP_DISTANCE, Metric.PICKUP_DURATION -> FilterSection.PICKUP
-        Metric.TRIP_DISTANCE, Metric.TRIP_DURATION, Metric.TOTAL_DISTANCE, Metric.TOTAL_DURATION -> FilterSection.TRIP
-        Metric.PASSENGER_RATING, Metric.HAS_MULTIPLE_STOPS, Metric.IS_LONG_TRIP,
-        Metric.IS_TOWARD_DESTINATION, Metric.ENDS_NEAR_HOME, Metric.PICKUP_IS_BLOCKED ->
-            FilterSection.PREFERENCES
+    get() = when (group) {
+        MetricGroup.EARNINGS -> FilterSection.EARNINGS
+        MetricGroup.PICKUP -> FilterSection.PICKUP
+        MetricGroup.TRIP -> FilterSection.TRIP
+        MetricGroup.PREFERENCES -> FilterSection.PREFERENCES
     }
 
-private val Metric.displayOrder: Int
-    get() = when (this) {
-        Metric.PAYOUT -> 0
-        Metric.RATE_PER_HOUR -> 1
-        Metric.RATE_PER_MINUTE -> 2
-        Metric.RATE_PER_KM -> 3
-        Metric.NET_PROFIT -> 4
-        Metric.NET_PROFIT_PERCENT -> 5
-        Metric.NET_PROFIT_PER_HOUR -> 6
-        Metric.PICKUP_DURATION -> 0
-        Metric.PICKUP_DISTANCE -> 1
-        Metric.TRIP_DURATION -> 0
-        Metric.TOTAL_DURATION -> 1
-        Metric.TRIP_DISTANCE -> 2
-        Metric.TOTAL_DISTANCE -> 3
-        Metric.PASSENGER_RATING -> 0
-        Metric.HAS_MULTIPLE_STOPS -> 1
-        Metric.IS_LONG_TRIP -> 2
-        Metric.IS_TOWARD_DESTINATION, Metric.ENDS_NEAR_HOME -> 3
-        Metric.PICKUP_IS_BLOCKED -> 4
-    }
+private val Metric.displayOrder: Int get() = order
 
 private val Comparator.displayOrder: Int
     get() = when (this) {
         Comparator.AT_LEAST, Comparator.IS_TRUE -> 0
         Comparator.AT_MOST, Comparator.IS_FALSE -> 1
-    }
-
-private val Metric.displayName: String
-    get() = when (this) {
-        Metric.PAYOUT -> "Pagamento total"
-        Metric.RATE_PER_KM -> "Valor por km"
-        Metric.RATE_PER_HOUR -> "Valor por hora"
-        Metric.RATE_PER_MINUTE -> "Valor por minuto"
-        Metric.NET_PROFIT -> "Lucro líquido"
-        Metric.NET_PROFIT_PERCENT -> "Lucro percentual"
-        Metric.NET_PROFIT_PER_HOUR -> "Lucro por hora"
-        Metric.PICKUP_DISTANCE -> "Distância de retirada"
-        Metric.PICKUP_DURATION -> "Tempo de retirada"
-        Metric.TRIP_DISTANCE -> "Distância da viagem"
-        Metric.TRIP_DURATION -> "Tempo de viagem"
-        Metric.TOTAL_DISTANCE -> "Distância total"
-        Metric.TOTAL_DURATION -> "Tempo total"
-        Metric.PASSENGER_RATING -> "Nota do passageiro"
-        Metric.HAS_MULTIPLE_STOPS -> "Múltiplas paradas"
-        Metric.IS_LONG_TRIP -> "Viagem longa"
-        Metric.IS_TOWARD_DESTINATION -> "Aproxima da casa"
-        Metric.ENDS_NEAR_HOME -> "Destino próximo de casa"
-        Metric.PICKUP_IS_BLOCKED -> "Local bloqueado"
     }
 
 private fun FilterRule.naturalLanguageComparison(): String = when (comparator) {
@@ -138,20 +95,25 @@ private fun FilterRule.naturalLanguageComparison(): String = when (comparator) {
 }
 
 private fun FilterRule.formattedTarget(): String? = target?.let { raw ->
-    when (metric) {
-        Metric.PAYOUT -> raw.asBrl()
-        Metric.RATE_PER_KM -> "${raw.asBrl()}/km"
-        Metric.RATE_PER_HOUR -> "${raw.asBrl()}/h"
-        Metric.RATE_PER_MINUTE -> "${raw.asBrl()}/min"
-        Metric.NET_PROFIT -> raw.asBrl()
-        Metric.NET_PROFIT_PERCENT -> "${raw / 100}%"
-        Metric.NET_PROFIT_PER_HOUR -> "${raw.asBrl()}/h"
-        Metric.PICKUP_DISTANCE, Metric.TRIP_DISTANCE, Metric.TOTAL_DISTANCE -> raw.asKilometres()
-        Metric.PICKUP_DURATION, Metric.TRIP_DURATION, Metric.TOTAL_DURATION -> raw.asMinutes()
-        Metric.PASSENGER_RATING -> "%.2f ★".format(BRAZILIAN_PORTUGUESE, raw / 100.0)
-        Metric.HAS_MULTIPLE_STOPS, Metric.IS_LONG_TRIP, Metric.IS_TOWARD_DESTINATION,
-        Metric.ENDS_NEAR_HOME, Metric.PICKUP_IS_BLOCKED -> null
+    when (metric.unit) {
+        MetricUnit.MONEY_CENTS -> raw.asBrl() + metric.rateSuffix()
+        MetricUnit.PERCENT_SCALED -> "${raw / MetricUnit.PERCENT_SCALED.scale}%"
+        MetricUnit.DISTANCE_METERS -> raw.asKilometres()
+        MetricUnit.DURATION_SECONDS -> raw.asMinutes()
+        MetricUnit.RATING_SCALED -> "%.2f ★".format(BRAZILIAN_PORTUGUESE, raw / MetricUnit.RATING_SCALED.scale.toDouble())
+        MetricUnit.FLAG -> null
     }
+}
+
+/**
+ * Money metrics that express a rate carry their denominator in the label, so the target reads
+ * "R$ 1,75/km" rather than a bare amount. A plain payout has no denominator.
+ */
+private fun Metric.rateSuffix(): String = when (this) {
+    Metric.RATE_PER_KM -> "/km"
+    Metric.RATE_PER_HOUR, Metric.NET_PROFIT_PER_HOUR -> "/h"
+    Metric.RATE_PER_MINUTE -> "/min"
+    else -> ""
 }
 
 private fun Long.asBrl(): String = NumberFormat.getCurrencyInstance(BRAZILIAN_PORTUGUESE).format(this / 100.0)
