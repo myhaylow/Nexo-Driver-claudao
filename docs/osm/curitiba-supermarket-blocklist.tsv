@@ -1,0 +1,43 @@
+# Fonte: OpenStreetMap contributors (ODbL) via Nominatim; revisÃ£o manual obrigatÃ³ria
+# Ãrea: Curitiba, ParanÃ¡; caixa: -25.60,-49.40,-25.30,-49.10
+# Coletado em: 2026-07-15; decisÃµes ainda nÃ£o ativadas no APK
+id	nome	aliases	rede	cidade	uf	latitude	longitude	raio_m	decisao	fonte	versao
+osm-way-178412979	AtacadÃ£o	atacadao|atacadÃ£o	AtacadÃ£o	Curitiba	PR	-25.4146766	-49.3520968	180	ANALISAR	OpenStreetMap Nominatim (way-178412979; verificaÃ§Ã£o manual)	2026-07-15
+osm-way-161312734	AtacadÃ£o	atacadao|atacadÃ£o	AtacadÃ£o	Curitiba	PR	-25.5188558	-49.2298415	180	ANALISAR	OpenStreetMap Nominatim (way-161312734; verificaÃ§Ã£o manual)	2026-07-15
+osm-way-129772761	Carrefour	carrefour|carrefour hipermercado	Carrefour	Curitiba	PR	-25.4553925	-49.2584932	180	ANALISAR	OpenStreetMap Nominatim (way/129772761)	2026-07-15
+osm-way-136389833	AtacadÃ£o	atacadao|atacadÃ£o	AtacadÃ£o	Curitiba	PR	-25.3896427	-49.2362982	180	ANALISAR	OpenStreetMap Nominatim (way-136389833; verificaÃ§Ã£o manual)	2026-07-15
+osm-way-461679070	AtacadÃ£o	atacadao|atacadÃ£o	AtacadÃ£o	Curitiba	PR	-25.4643834	-49.3015140	180	ANALISAR	OpenStreetMap Nominatim (way-461679070; verificaÃ§Ã£o manual)	2026-07-15
+osm-node-9233313978	Angeloni	angeloni	Angeloni	Curitiba	PR	-25.4347551	-49.3069964	180	ANALISAR	OpenStreetMap Nominatim (node/9233313978)	2026-07-15
+osm-way-557479307	Jacomar	jacomar|supermercado jacomar	Jacomar	Curitiba	PR	-25.5234641	-49.2449386	180	ANALISAR	OpenStreetMap Nominatim (way/557479307)	2026-07-15
+osm-way-128645678	Carrefour	carrefour|carrefour hipermercado	Carrefour	Curitiba	PR	-25.4377287	-49.318749	180	ANALISAR	OpenStreetMap Nominatim (way/128645678)	2026-07-15
+osm-way-356386106	Festval	festval	Festval	Curitiba	PR	-25.4503861	-49.2875907	180	ANALISAR	OpenStreetMap Nominatim (way/356386106)	2026-07-15
+osm-node-6115572994	Jacomar	jacomar|supermercado jacomar	Jacomar	Curitiba	PR	-25.4798221	-49.2009289	180	ANALISAR	OpenStreetMap Nominatim (node/6115572994)	2026-07-15
+osm-node-2313773223	Nacional	nacional supermercado	Nacional	Curitiba	PR	-25.4436332	-49.2829521	180	ANALISAR	OpenStreetMap Nominatim (node/2313773223)	2026-07-15
+osm-way-275862198	Festval	festval	Festval	Curitiba	PR	-25.4200734	-49.2390026	180	ANALISAR	OpenStreetMap Nominatim (way/275862198)	2026-07-15
+osm-way-670135050	Condor	condor|supermercado condor	Condor	Curitiba	PR	-25.4926137	-49.2423624	180	ANALISAR	OpenStreetMap Nominatim (way/670135050)	2026-07-15
+osm-way-646016126	Condor	condor|supermercado condor	Condor	Curitiba	PR	-25.5155791	-49.2964366	180	ANALISAR	OpenStreetMap Nominatim (way/646016126)	2026-07-15
+osm-node-6358867643	AssaÃ­ Atacadista	assai|assaÃ­|assai atacadista|assaÃ­ atacadista	AssaÃ­	Curitiba	PR	-25.5147977	-49.2909560	180	ANALISAR	OpenStreetMap Nominatim (node-6358867643; verificaÃ§Ã£o manual)	2026-07-15
+osm-way-129782612	Carrefour	carrefour|carrefour hipermercado	Carrefour	Curitiba	PR	-25.455159	-49.2578243	180	ANALISAR	OpenStreetMap Nominatim (way/129782612)	2026-07-15
+osm-way-136503019	Muffato	muffato|super muffato	Muffato	Curitiba	PR	-25.4358724	-49.2794803	180	ANALISAR	OpenStreetMap Nominatim (way/136503019)	2026-07-15
+osm-way-465873565	Super Muffato Jardim das Américas	muffato|super muffato	Muffato	Curitiba	PR	-25.4525253	-49.2274093	180	ANALISAR	OpenStreetMap Nominatim (way/465873565)	2026-07-15
+osm-way-544840179	Nacional	nacional supermercado	Nacional	Curitiba	PR	-25.3943689	-49.2278114	180	ANALISAR	OpenStreetMap Nominatim (way/544840179)	2026-07-15
+osm-node-4577312189	Carrefour	carrefour|carrefour hipermercado	Carrefour	Curitiba	PR	-25.4366653	-49.3177593	180	ANALISAR	OpenStreetMap Nominatim (node/4577312189)	2026-07-15
+osm-way-913451954	Condor	condor|supermercado condor	Condor	Curitiba	PR	-25.483072	-49.2201826	180	ANALISAR	OpenStreetMap Nominatim (way/913451954)	2026-07-15
+osm-node-4345058993	Jacomar	jacomar|supermercado jacomar	Jacomar	Curitiba	PR	-25.4814291	-49.2243539	180	ANALISAR	OpenStreetMap Nominatim (node/4345058993)	2026-07-15
+osm-way-447998571	AtacadÃ£o	atacadao|atacadÃ£o	AtacadÃ£o	Curitiba	PR	-25.4832851	-49.3183556	180	ANALISAR	OpenStreetMap Nominatim (way-447998571; verificaÃ§Ã£o manual)	2026-07-15
+osm-node-12677578353	Autoposto Jacomar Boqueirão	jacomar|supermercado jacomar	Jacomar	Curitiba	PR	-25.5149566	-49.2437777	180	ANALISAR	OpenStreetMap Nominatim (node/12677578353)	2026-07-15
+osm-way-131490822	AtacadÃ£o	atacadao|atacadÃ£o	AtacadÃ£o	Curitiba	PR	-25.4509688	-49.2432104	180	ANALISAR	OpenStreetMap Nominatim (way-131490822; verificaÃ§Ã£o manual)	2026-07-15
+osm-way-128645680	Carrefour	carrefour|carrefour hipermercado	Carrefour	Curitiba	PR	-25.4376091	-49.3176053	180	ANALISAR	OpenStreetMap Nominatim (way/128645680)	2026-07-15
+osm-way-159211859	Condor	condor|supermercado condor	Condor	Curitiba	PR	-25.4824027	-49.2206189	180	ANALISAR	OpenStreetMap Nominatim (way/159211859)	2026-07-15
+osm-way-564142253	Max Atacadista	max atacadista|max	Max Atacadista	Curitiba	PR	-25.4025911	-49.21524	180	ANALISAR	OpenStreetMap Nominatim (way/564142253)	2026-07-15
+osm-way-276751057	Festval	festval	Festval	Curitiba	PR	-25.4685428	-49.2328309	180	ANALISAR	OpenStreetMap Nominatim (way/276751057)	2026-07-15
+osm-way-162029995	Jacomar	jacomar|supermercado jacomar	Jacomar	Curitiba	PR	-25.5146685	-49.242727	180	ANALISAR	OpenStreetMap Nominatim (way/162029995)	2026-07-15
+osm-way-173186740	Muffato	muffato|super muffato	Muffato	Curitiba	PR	-25.429062	-49.2296843	180	ANALISAR	OpenStreetMap Nominatim (way/173186740)	2026-07-15
+osm-node-9233313977	Angeloni	angeloni	Angeloni	Curitiba	PR	-25.4347817	-49.3070635	180	ANALISAR	OpenStreetMap Nominatim (node/9233313977)	2026-07-15
+osm-way-310957165	Festval	festval	Festval	Curitiba	PR	-25.458969	-49.2898197	180	ANALISAR	OpenStreetMap Nominatim (way/310957165)	2026-07-15
+osm-way-682134307	jacomar	jacomar|supermercado jacomar	Jacomar	Curitiba	PR	-25.543303	-49.2673946	180	ANALISAR	OpenStreetMap Nominatim (way/682134307)	2026-07-15
+osm-way-1172041687	Muffato	muffato|super muffato	Muffato	Curitiba	PR	-25.4284446	-49.2631587	180	ANALISAR	OpenStreetMap Nominatim (way/1172041687)	2026-07-15
+osm-way-264746831	Festval	festval	Festval	Curitiba	PR	-25.4409709	-49.2824166	180	ANALISAR	OpenStreetMap Nominatim (way/264746831)	2026-07-15
+osm-way-129772760	Carrefour	carrefour|carrefour hipermercado	Carrefour	Curitiba	PR	-25.4557005	-49.2593617	180	ANALISAR	OpenStreetMap Nominatim (way/129772760)	2026-07-15
+osm-way-1473363958	Festval	festval	Festval	Curitiba	PR	-25.4079464	-49.251398	180	ANALISAR	OpenStreetMap Nominatim (way/1473363958)	2026-07-15
+osm-way-158949291	Supermercado Jacomar	jacomar|supermercado jacomar	Jacomar	Curitiba	PR	-25.4811728	-49.2238253	180	ANALISAR	OpenStreetMap Nominatim (way/158949291)	2026-07-15

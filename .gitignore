@@ -1,0 +1,24 @@
+.gradle/
+.kotlin/
+build/
+**/build/
+.idea/
+local.properties
+*.iml
+captures/
+artifacts/logs/
+keystore.properties
+*.keystore
+*.jks
+
+# Build outputs must never enter history. artifacts/ held a 78MB APK plus a 104MB base64 copy of
+# it, and GitHub hard-rejects any single file over 100MB -- staging them made the first commit
+# 377MB. They are reproducible from source, so they are outputs, not inputs.
+*.apk
+*.aab
+*.apk.b64
+artifacts/
+
+# A second checkout carrying its own .git; nesting it would either be swallowed as a stray gitlink
+# or drag an unrelated history along.
+ui-teste-apk-repo/

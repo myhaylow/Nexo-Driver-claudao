@@ -1,0 +1,31 @@
+# Project-scoped Codex configuration for Driver Inteligente.
+# Loaded only when this trusted project is opened from the repository root.
+
+model = "gpt-5.6-terra"
+model_reasoning_effort = "medium"
+model_verbosity = "low"
+
+# Keep normal project work writable only in the workspace. Destructive,
+# external, publication, credential, and device-changing actions still require
+# explicit user authorization by policy in AGENTS.md.
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+web_search = "cached"
+
+[features]
+goals = true
+multi_agent = true
+hooks = true
+
+[agents]
+max_threads = 4
+max_depth = 1
+job_max_runtime_seconds = 1800
+interrupt_message = true
+
+[sandbox_workspace_write]
+writable_roots = []
+network_access = false
+exclude_tmpdir_env_var = false
+exclude_slash_tmp = false
+

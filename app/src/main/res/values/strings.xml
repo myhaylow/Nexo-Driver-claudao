@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Driver Inteligente</string>
+    <string name="accessibility_service_description">Lê ofertas visíveis da Uber e 99 para calcular métricas e avisar por voz. Não toca, aceita ou recusa corridas automaticamente.</string>
+    <string name="location_notification_channel">Localização</string>
+    <string name="location_notification_channel_description">Status do rastreamento de localização em primeiro plano</string>
+    <string name="location_notification_title">Localização ativa</string>
+    <string name="location_notification_text">Usada apenas enquanto este serviço estiver visível.</string>
+    <string name="location_notification_stop">Parar</string>
+</resources>
