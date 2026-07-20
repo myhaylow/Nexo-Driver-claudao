@@ -22,3 +22,8 @@ artifacts/
 # A second checkout carrying its own .git; nesting it would either be swallowed as a stray gitlink
 # or drag an unrelated history along.
 ui-teste-apk-repo/
+
+# Real offer screenshots carry a passenger's pickup address, rating and trip count. See the README
+# in that folder; the test that uses them skips when they are absent.
+app/src/androidTest/assets/offer-fixtures/*
+!app/src/androidTest/assets/offer-fixtures/README.md
