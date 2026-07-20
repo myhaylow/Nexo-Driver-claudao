@@ -46,4 +46,27 @@ class SupermarketBlocklistTest {
         assertTrue(result.matched)
         assertEquals(SupermarketMatchMethod.ALIAS_TEXT, result.method)
     }
+
+    @Test
+    fun `an alias does not match inside a longer word`() {
+        // The Extra chain's alias must not fire on a street named "Extrema" -- the substring bug
+        // that rejected good rides. Uses a coordinate far from every point so only text can match.
+        val withExtra = SupermarketBlocklistTsvCodec.decode(
+            """
+            id	nome	aliases	rede	cidade	uf	latitude	longitude	raio_m	decisao	fonte	versao
+            osm-3	Extra	extra|supermercado extra	Extra	Curitiba	PR	-25.40	-49.30	180	BLOQUEAR	OSM	2026-07
+            """.trimIndent(),
+        )
+
+        assertFalse(withExtra.matchPickup(pickup = null, pickupAddress = "Rua Extrema, 100, Curitiba").matched)
+        assertTrue(withExtra.matchPickup(pickup = null, pickupAddress = "Extra Batel, Curitiba").matched)
+    }
+
+    @Test
+    fun `a multi-word alias still matches`() {
+        val result = blocklist.matchPickup(pickup = null, pickupAddress = "Rua X, Supermercado Condor")
+
+        assertTrue(result.matched)
+        assertEquals(SupermarketMatchMethod.ALIAS_TEXT, result.method)
+    }
 }

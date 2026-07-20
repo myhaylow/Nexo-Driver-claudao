@@ -59,13 +59,18 @@ class SupermarketBlocklist(
             }
         }
 
-        // Text fallback only when there is no trusted coordinate hit.
+        // Text fallback only when there is no trusted coordinate hit. Matched on whole words, not
+        // as a loose substring: a plain contains() made the alias "extra" (the Extra chain) fire on
+        // "Rua Extrema", rejecting a good ride as a supermarket. normalize() collapses the address
+        // to space-separated tokens, so padding both sides with a space anchors the alias to word
+        // boundaries and still matches multi-word aliases like "supermercado jacomar".
         val normalizedAddress = pickupAddress?.let(::normalize).orEmpty()
         if (normalizedAddress.length >= MIN_ALIAS_LENGTH) {
+            val paddedAddress = " $normalizedAddress "
             val hit = points.firstOrNull { point ->
                 (listOf(point.name) + point.aliases)
                     .map(::normalize)
-                    .any { alias -> alias.length >= MIN_ALIAS_LENGTH && normalizedAddress.contains(alias) }
+                    .any { alias -> alias.length >= MIN_ALIAS_LENGTH && paddedAddress.contains(" $alias ") }
             }
             if (hit != null) {
                 return SupermarketMatchResult(true, SupermarketMatchMethod.ALIAS_TEXT, hit)

@@ -17,12 +17,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import br.com.nexo.driver.analysis.OfferSessionMetricsRepository
@@ -35,10 +33,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import br.com.nexo.driver.evaluation.Comparator
-import br.com.nexo.driver.evaluation.EvaluationMode
 import br.com.nexo.driver.evaluation.FilterRule
 import br.com.nexo.driver.evaluation.Metric
 import br.com.nexo.driver.evaluation.MetricUnit
+import br.com.nexo.driver.evaluation.withSystemPolicy
 import br.com.nexo.driver.ui.theme.DriverInteligenteTheme
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -63,13 +61,6 @@ fun FilterRuleEditorSheet(
     var targetText by rememberSaveable(rule.metric, rule.target) {
         mutableStateOf(rule.target?.toDisplayInput(rule.metric).orEmpty())
     }
-    var tolerancePercent by rememberSaveable(rule.metric, rule.tolerancePercent) {
-        mutableIntStateOf(rule.tolerancePercent)
-    }
-    var weight by rememberSaveable(rule.metric, rule.weight) {
-        mutableIntStateOf(rule.weight)
-    }
-    var mode by rememberSaveable(rule.metric, rule.mode) { mutableStateOf(rule.mode) }
 
     val parsedTarget = remember(targetText, rule.metric) {
         targetText.toNormalizedTarget(rule.metric)
@@ -132,14 +123,6 @@ fun FilterRuleEditorSheet(
                     }
                 }
                 RuleImpactPreview(impact)
-
-                RuleNumberSlider(
-                    label = "Tolerância",
-                    valueText = "$tolerancePercent%",
-                    value = tolerancePercent.toFloat(),
-                    valueRange = 0f..100f,
-                    onValueChange = { tolerancePercent = it.toInt() },
-                )
             } else {
                 BooleanComparatorSelector(
                     metric = rule.metric,
@@ -148,15 +131,8 @@ fun FilterRuleEditorSheet(
                 )
             }
 
-            RuleNumberSlider(
-                label = "Peso na decisão",
-                valueText = weight.toString(),
-                value = weight.toFloat(),
-                valueRange = 1f..10f,
-                onValueChange = { weight = it.toInt().coerceIn(1, 10) },
-            )
-
-            EvaluationModeSelector(mode = mode, onModeChange = { mode = it })
+            // Weight, mode and tolerance are no longer shown: the system sets them (see
+            // withSystemPolicy). The driver decides only the bound and the value.
 
             HorizontalDivider()
             Row(
@@ -173,11 +149,9 @@ fun FilterRuleEditorSheet(
                                 metric = rule.metric,
                                 comparator = comparator,
                                 target = if (numericRule) parsedTarget else null,
-                                tolerancePercent = tolerancePercent,
-                                weight = weight,
-                                mode = mode,
                                 enabled = rule.enabled,
-                            ),
+                                // Weight, mode and tolerance are the system's to set.
+                            ).withSystemPolicy(),
                         )
                     },
                     enabled = targetIsValid,
@@ -258,38 +232,6 @@ private fun BooleanComparatorSelector(
 }
 
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
-private fun EvaluationModeSelector(
-    mode: EvaluationMode,
-    onModeChange: (EvaluationMode) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Modo da regra", style = MaterialTheme.typography.labelLarge)
-        ChoiceRow {
-            ChoiceButton(
-                selected = mode == EvaluationMode.SCORE,
-                label = "Pontuação",
-                onClick = { onModeChange(EvaluationMode.SCORE) },
-            )
-            ChoiceButton(
-                selected = mode == EvaluationMode.ELIMINATORY,
-                label = "Eliminatória",
-                onClick = { onModeChange(EvaluationMode.ELIMINATORY) },
-            )
-        }
-        Text(
-            text = if (mode == EvaluationMode.SCORE) {
-                "Influencia a nota final da oferta."
-            } else {
-                "Se falhar, a oferta é recusada; se não for possível ler, fica em análise."
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
 private fun ChoiceRow(content: @Composable RowScope.() -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -309,28 +251,6 @@ private fun RowScope.ChoiceButton(
         Button(onClick = onClick, modifier = buttonModifier) { Text(label, maxLines = 1) }
     } else {
         OutlinedButton(onClick = onClick, modifier = buttonModifier) { Text(label, maxLines = 1) }
-    }
-}
-
-@Composable
-private fun RuleNumberSlider(
-    label: String,
-    valueText: String,
-    value: Float,
-    valueRange: ClosedFloatingPointRange<Float>,
-    onValueChange: (Float) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(label, style = MaterialTheme.typography.labelLarge)
-            Text(valueText, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-        }
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = valueRange,
-            steps = (valueRange.endInclusive - valueRange.start).toInt() - 1,
-        )
     }
 }
 
@@ -408,8 +328,6 @@ private fun NumericFilterRuleEditorPreview() {
                 metric = Metric.RATE_PER_KM,
                 comparator = Comparator.AT_LEAST,
                 target = 175,
-                tolerancePercent = 10,
-                weight = 3,
             ),
             onSave = {},
             onDismiss = {},
@@ -425,7 +343,6 @@ private fun BooleanFilterRuleEditorPreview() {
             rule = FilterRule(
                 metric = Metric.HAS_MULTIPLE_STOPS,
                 comparator = Comparator.IS_FALSE,
-                mode = EvaluationMode.ELIMINATORY,
             ),
             onSave = {},
             onDismiss = {},

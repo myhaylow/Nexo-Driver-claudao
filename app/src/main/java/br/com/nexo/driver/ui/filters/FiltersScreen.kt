@@ -36,7 +36,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import br.com.nexo.driver.evaluation.Comparator
-import br.com.nexo.driver.evaluation.EvaluationMode
 import br.com.nexo.driver.evaluation.FilterRule
 import br.com.nexo.driver.evaluation.Metric
 import br.com.nexo.driver.evaluation.RuleBlocker
@@ -269,14 +268,6 @@ private fun FilterRuleRow(
             item.blocker?.let { blocker ->
                 Spacer(Modifier.height(6.dp))
                 RuleBlockerNotice(blocker = blocker, onAction = onBlockerAction)
-            }
-            if (item.rule.mode == EvaluationMode.ELIMINATORY) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "Eliminatória",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.error,
-                )
             }
         }
         Spacer(Modifier.width(12.dp))

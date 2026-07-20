@@ -16,6 +16,7 @@ import br.com.nexo.driver.evaluation.EvaluationMode
 import br.com.nexo.driver.evaluation.FilterRule
 import br.com.nexo.driver.evaluation.Metric
 import br.com.nexo.driver.evaluation.OfferEvaluator
+import br.com.nexo.driver.evaluation.withSystemPolicy
 import br.com.nexo.driver.offer.Confidence
 import br.com.nexo.driver.offer.FieldSource
 import br.com.nexo.driver.offer.NormalizedOffer
@@ -97,7 +98,10 @@ class OfferAnalysisProcessor(
         val appSettings = appSettingsStore.load()
         val evaluator = evaluatorFor(appSettings)
         val profile = profileStore.load().activeProfile
-        val rules = profile?.takeIf { it.isEnabled }?.rules.orEmpty() + blocklistRule(enrichedOffer)
+        // Weight, mode and tolerance are system-decided, not driver-set, so every rule is stamped
+        // with the current policy before evaluation regardless of what was persisted.
+        val rules = (profile?.takeIf { it.isEnabled }?.rules.orEmpty() + blocklistRule(enrichedOffer))
+            .map { it.withSystemPolicy() }
         val overlayPreferences = overlayPreferenceStore.load()
         val fuelSettings = fuelSettingsStore.load()
         val derived = evaluator.derive(enrichedOffer)

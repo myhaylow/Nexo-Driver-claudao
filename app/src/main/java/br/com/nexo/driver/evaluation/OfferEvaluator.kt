@@ -127,6 +127,41 @@ enum class Comparator { AT_LEAST, AT_MOST, IS_TRUE, IS_FALSE }
 
 enum class EvaluationMode { SCORE, ELIMINATORY }
 
+/**
+ * The weight and mode the system assigns a metric, so the driver never has to. The editor used to
+ * expose a 1-10 weight slider and a score/eliminatory toggle -- engineer concepts a driver should
+ * not have to reason about. Now the driver only picks the bound and the value; policy decides the
+ * rest. Earnings and rating carry the most weight, trip totals the least, and only a blocked pickup
+ * is a hard veto -- everything else scores, letting the weighted total and the km-compensates-hour
+ * rule ([[DecisionReason.KM_COMPENSATES_HOUR]]) do the nuanced work.
+ */
+val Metric.systemWeight: Int
+    get() = when (this) {
+        Metric.PAYOUT, Metric.RATE_PER_KM, Metric.RATE_PER_HOUR, Metric.RATE_PER_MINUTE,
+        Metric.NET_PROFIT, Metric.NET_PROFIT_PERCENT, Metric.NET_PROFIT_PER_HOUR,
+        Metric.PASSENGER_RATING -> 3
+        Metric.PICKUP_DISTANCE, Metric.PICKUP_DURATION,
+        Metric.HAS_MULTIPLE_STOPS, Metric.IS_LONG_TRIP,
+        Metric.IS_TOWARD_DESTINATION, Metric.ENDS_NEAR_HOME -> 2
+        Metric.TRIP_DISTANCE, Metric.TRIP_DURATION,
+        Metric.TOTAL_DISTANCE, Metric.TOTAL_DURATION -> 1
+        Metric.PICKUP_IS_BLOCKED -> 1
+    }
+
+/** Only a blocked pickup vetoes outright; every other metric contributes to the score. */
+val Metric.systemMode: EvaluationMode
+    get() = if (this == Metric.PICKUP_IS_BLOCKED) EvaluationMode.ELIMINATORY else EvaluationMode.SCORE
+
+/** Re-stamps a rule with the system's weight, mode and tolerance, discarding any hand-set values. */
+fun FilterRule.withSystemPolicy(): FilterRule = copy(
+    weight = metric.systemWeight,
+    mode = metric.systemMode,
+    tolerancePercent = SYSTEM_TOLERANCE_PERCENT,
+    toleranceAbsolute = null,
+)
+
+const val SYSTEM_TOLERANCE_PERCENT = 10
+
 enum class MetricStatus { PASS, NEAR, FAIL, UNKNOWN }
 
 enum class OfferDecision { ACCEPT, ANALYZE, REJECT }

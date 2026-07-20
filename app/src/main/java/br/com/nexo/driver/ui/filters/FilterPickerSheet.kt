@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import br.com.nexo.driver.evaluation.Comparator
 import br.com.nexo.driver.evaluation.FilterRule
+import br.com.nexo.driver.evaluation.withSystemPolicy
 import br.com.nexo.driver.evaluation.Metric
 
 /** Explicit rule picker so drivers choose the next limit rather than receiving a hidden sequence. */
@@ -80,7 +81,7 @@ private fun Metric.defaultRule(comparator: Comparator): FilterRule = FilterRule(
     metric = this,
     comparator = comparator,
     target = defaultTarget(),
-)
+).withSystemPolicy()
 
 private fun Metric.defaultTarget(): Long? = when (this) {
     Metric.PAYOUT -> 800L
