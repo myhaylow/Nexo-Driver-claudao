@@ -13,9 +13,11 @@ import br.com.nexo.driver.evaluation.Comparator
 import br.com.nexo.driver.evaluation.DEFAULT_ACCEPT_THRESHOLD
 import br.com.nexo.driver.evaluation.DEFAULT_ANALYZE_THRESHOLD
 import br.com.nexo.driver.evaluation.EvaluationMode
+import br.com.nexo.driver.evaluation.EvaluationResult
 import br.com.nexo.driver.evaluation.FilterRule
 import br.com.nexo.driver.evaluation.Metric
 import br.com.nexo.driver.evaluation.OfferEvaluator
+import br.com.nexo.driver.evaluation.OfferRanking
 import br.com.nexo.driver.evaluation.withSystemPolicy
 import br.com.nexo.driver.offer.Confidence
 import br.com.nexo.driver.offer.FieldSource
@@ -166,7 +168,34 @@ class OfferAnalysisProcessor(
             offer = enrichedOffer,
             overlay = overlay,
             appearance = overlayAppearanceFor(appSettings),
+            evaluation = evaluation,
         )
+    }
+
+    /**
+     * Analyzes the primary offer exactly as [analyze] does, then annotates the resulting card with
+     * the other offers visible at the same time (Uber's job-board tray), ranked best-first. The
+     * primary offer and every side effect (session counters, speech) stay identical to the single
+     * offer path -- alternatives are evaluated without side effects and only decorate the overlay.
+     * With no alternatives it is exactly [analyze], so the ordinary path is unchanged.
+     */
+    fun analyzeWithAlternatives(
+        primary: NormalizedOffer,
+        others: List<NormalizedOffer>,
+        source: AnalysisSource,
+    ): OfferAnalysisResult? {
+        val result = analyze(primary, source) ?: return null
+        if (others.isEmpty()) return result
+        val evaluated = others.mapNotNull { offer ->
+            analyze(offer, source, allowSideEffects = false)?.let { offer to it }
+        }
+        val ranked = OfferRanking.rank(
+            evaluated,
+            resultOf = { it.second.evaluation },
+            payoutCentsOf = { it.first.payout.value?.cents },
+        )
+        val alternatives = ranked.map { presenter.alternativeOf(it.offer.first, it.offer.second.overlay) }
+        return result.copy(overlay = result.overlay.copy(alternatives = alternatives))
     }
 
     /**
@@ -339,6 +368,8 @@ data class OfferAnalysisResult(
     val offer: NormalizedOffer,
     val overlay: OfferOverlayUiModel,
     val appearance: OverlayAppearance,
+    /** The evaluation behind [overlay], exposed so several offers can be ranked against each other. */
+    val evaluation: EvaluationResult = EvaluationResult(emptyList(), 0, br.com.nexo.driver.evaluation.OfferDecision.ANALYZE),
 )
 
 data class OverlayAppearance(

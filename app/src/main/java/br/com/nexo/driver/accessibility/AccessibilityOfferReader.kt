@@ -71,32 +71,38 @@ class AccessibilityOfferReader(
             routeLegCount = flattened.count { ROUTE_LEG_TOKEN.containsMatchIn(it) },
             viewIdAnchorCount = viewIdSources.size,
         )
-        val cardLines = OfferCardTextRegionExtractor.extract(lines, effectiveHint)
-            ?: return AccessibilityReadResult(
+        // extractAll returns one window per visible card (Uber's tray), ranked best-first. The first
+        // is the same window extract() used to return, so the primary snapshot is unchanged; the
+        // rest ride along as additionalSnapshots for the multi-offer overlay.
+        val windows = OfferCardTextRegionExtractor.extractAll(lines, effectiveHint)
+        if (windows.isEmpty()) {
+            return AccessibilityReadResult(
                 snapshot = null,
                 diagnostics = diagnostics,
                 rawText = flattened.joinToString("\n"),
             )
-        val blocks = cardLines
-            .map(String::trim)
+        }
+        val snapshots = windows.map { window -> window.toSnapshot(effectiveHint) }
+        return AccessibilityReadResult(
+            snapshot = snapshots.first(),
+            additionalSnapshots = snapshots.drop(1),
+            diagnostics = diagnostics,
+            rawText = flattened.joinToString("\n"),
+        )
+    }
+
+    private fun List<String>.toSnapshot(effectiveHint: String?): OcrTextSnapshot {
+        val blocks = map(String::trim)
             .filter(String::isNotEmpty)
             .distinct()
             .mapIndexed { index, text ->
-                OcrTextBlock(
-                    text = text,
-                    readingOrder = index,
-                    confidence = ACCESSIBILITY_CONFIDENCE,
-                )
+                OcrTextBlock(text = text, readingOrder = index, confidence = ACCESSIBILITY_CONFIDENCE)
             }
-        return AccessibilityReadResult(
-            snapshot = OcrTextSnapshot(
-                blocks = blocks,
-                capturedAtEpochMs = nowEpochMs(),
-                layoutHint = effectiveHint ?: blocks.inferLayoutHint(),
-                fieldSource = FieldSource.ACCESSIBILITY,
-            ),
-            diagnostics = diagnostics,
-            rawText = flattened.joinToString("\n"),
+        return OcrTextSnapshot(
+            blocks = blocks,
+            capturedAtEpochMs = nowEpochMs(),
+            layoutHint = effectiveHint ?: blocks.inferLayoutHint(),
+            fieldSource = FieldSource.ACCESSIBILITY,
         )
     }
 
@@ -175,6 +181,8 @@ data class AccessibilityReadResult(
     val snapshot: OcrTextSnapshot?,
     val diagnostics: AccessibilityReadDiagnostics,
     val rawText: String,
+    /** Snapshots of the other cards visible at the same time; empty in the ordinary single-card case. */
+    val additionalSnapshots: List<OcrTextSnapshot> = emptyList(),
 )
 
 data class AccessibilityReadDiagnostics(

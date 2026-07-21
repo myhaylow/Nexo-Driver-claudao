@@ -50,6 +50,12 @@ data class OfferOverlayUiModel(
     val decisionReason: String? = null,
     /** Share of configured rule weight that was actually readable, 0..100. */
     val coveragePercent: Int = 100,
+    /**
+     * Other offers visible at the same time (Uber's job-board tray), ranked best-first. Empty for
+     * the ordinary single-card case, so an offer shown on its own renders exactly as before. The
+     * strip is read-only annotation: the driver still selects in the ride app itself.
+     */
+    val alternatives: List<OverlayAlternativeUi> = emptyList(),
 ) {
     init {
         require(gridFields.size == 4 && gridFields.distinct().size == 4) {
@@ -76,4 +82,12 @@ data class OverlayMetricUi(
     val value: String,
     val status: OverlayStatus,
     val isAvailable: Boolean = true,
+)
+
+/** One row of the multi-offer strip: a compact, read-only summary of a simultaneously-visible offer. */
+data class OverlayAlternativeUi(
+    val provider: String,
+    val payout: String,
+    val ratePerKm: String,
+    val status: OverlayStatus,
 )

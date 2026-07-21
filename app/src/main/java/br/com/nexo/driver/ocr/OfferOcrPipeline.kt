@@ -115,6 +115,15 @@ class OfferOcrPipeline(
         return OfferOcrOutput(raw, offer, latency, duplicate, attempt.unrecognizedLayoutSource)
     }
 
+    /**
+     * Parses a single snapshot to an offer without deduplication or metrics. Used for the extra
+     * cards in a multi-offer tray, which decorate the primary card and must not disturb the
+     * dedup window or the counters the primary offer drives.
+     */
+    @Synchronized
+    fun parse(snapshot: OcrTextSnapshot): NormalizedOffer? =
+        parserRegistry.parseAttempt(snapshot.toRawOfferText()).offer
+
     @Synchronized
     fun metrics(): OfferOcrMetrics = metrics
 

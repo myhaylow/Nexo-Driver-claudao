@@ -11,6 +11,7 @@ import br.com.nexo.driver.evaluation.OfferEvaluator
 import br.com.nexo.driver.offer.Confidence
 import br.com.nexo.driver.offer.FieldSource
 import br.com.nexo.driver.offer.NormalizedOffer
+import br.com.nexo.driver.offer.OfferSource
 import br.com.nexo.driver.overlay.preferences.OverlayMetricField
 import br.com.nexo.driver.overlay.preferences.OverlayPreferences
 import java.text.NumberFormat
@@ -122,6 +123,25 @@ class OfferOverlayPresenter(
             isTowardHome = offer.endsNearHome.value == true || offer.headingTowardHome.value == true,
             decisionReason = result.explain(),
             coveragePercent = result.coveragePercent,
+        )
+    }
+
+    /**
+     * Compresses an already-presented offer into a one-line tray row. It reuses the full model's
+     * status, payout and R$/km so an alternative reads consistently with the primary card; the
+     * provider falls back to the platform name when the service tier was not read.
+     */
+    fun alternativeOf(offer: NormalizedOffer, overlay: OfferOverlayUiModel): OverlayAlternativeUi {
+        val provider = offer.serviceType.value?.takeIf { it.isNotBlank() }
+            ?: when (offer.source) {
+                OfferSource.UBER -> "Uber"
+                OfferSource.NINETY_NINE -> "99"
+            }
+        return OverlayAlternativeUi(
+            provider = provider,
+            payout = if (overlay.isPayoutAvailable) overlay.payout else "—",
+            ratePerKm = if (overlay.ratePerKm.isAvailable) "${overlay.ratePerKm.value}/km" else "—",
+            status = overlay.status,
         )
     }
 

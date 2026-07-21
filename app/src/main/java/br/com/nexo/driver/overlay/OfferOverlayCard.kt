@@ -73,6 +73,7 @@ fun OfferOverlayCard(
                 Spacer(Modifier.height(10.dp))
                 OverlayFooter(model)
                 DecisionReason(model, decisionColor)
+                AlternativesStrip(model.alternatives)
             }
         }
 
@@ -251,6 +252,63 @@ private fun DecisionReason(model: OfferOverlayUiModel, color: Color) {
     )
 }
 
+/**
+ * The other offers on screen at the same time (Uber's tray), ranked best-first under a divider.
+ * Each row is a coloured dot (the same accept/analyze/reject signal), the provider, its payout and
+ * R$/km. Purely informative -- it never adds a tap target, matching the window's FLAG_NOT_TOUCHABLE.
+ */
+@Composable
+private fun AlternativesStrip(alternatives: List<OverlayAlternativeUi>) {
+    if (alternatives.isEmpty()) return
+    Spacer(Modifier.height(10.dp))
+    MetricDivider()
+    Spacer(Modifier.height(8.dp))
+    Text(
+        text = "Outras ofertas na tela",
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    alternatives.forEach { alternative ->
+        Spacer(Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(statusColor(alternative.status)),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = alternative.provider,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = alternative.ratePerKm,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = alternative.payout,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.ExtraBold,
+                color = statusColor(alternative.status),
+                maxLines = 1,
+            )
+        }
+    }
+}
+
 private const val LOW_COVERAGE_PERCENT = 60
 
 @Composable
@@ -394,6 +452,30 @@ private fun OfferOverlayCardTowardHomePreview() {
                 netProfit = OverlayMetricUi("R$ 46,35", OverlayStatus.UNKNOWN),
                 totalDistance = OverlayMetricUi("18,1 km", OverlayStatus.ACCEPT),
                 isTowardHome = true,
+            ),
+            modifier = Modifier.padding(16.dp),
+        )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF141416, widthDp = 360)
+@Composable
+private fun OfferOverlayCardTrayPreview() {
+    DriverInteligenteTheme {
+        OfferOverlayCard(
+            model = OfferOverlayUiModel(
+                status = OverlayStatus.ACCEPT,
+                totalDuration = "28 min",
+                payout = "R$ 32,10",
+                ratePerKm = OverlayMetricUi("1,90", OverlayStatus.ACCEPT),
+                ratePerHour = OverlayMetricUi("42,10", OverlayStatus.ACCEPT),
+                passengerRating = OverlayMetricUi("4,92", OverlayStatus.ACCEPT),
+                pickup = OverlayMetricUi("3 min · 1,1 km", OverlayStatus.ACCEPT),
+                totalDistance = OverlayMetricUi("12,4 km", OverlayStatus.ACCEPT),
+                alternatives = listOf(
+                    OverlayAlternativeUi("Comfort", "R$ 24,00", "R$ 1,55/km", OverlayStatus.ANALYZE),
+                    OverlayAlternativeUi("UberX", "R$ 15,80", "R$ 1,20/km", OverlayStatus.REJECT),
+                ),
             ),
             modifier = Modifier.padding(16.dp),
         )

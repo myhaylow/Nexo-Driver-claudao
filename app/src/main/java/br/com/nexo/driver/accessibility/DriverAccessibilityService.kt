@@ -173,11 +173,14 @@ class DriverAccessibilityService : AccessibilityService() {
             screenshotFallback?.request(snapshot.layoutHint)
             return
         }
-        val result = processor.analyze(offer, AnalysisSource.ACCESSIBILITY) ?: return
+        // Uber's tray can show several cards at once. The primary offer above is unchanged; any
+        // other readable cards ride along as ranked, read-only alternatives on the same overlay.
+        val alternatives = readResult.additionalSnapshots.mapNotNull { pipeline.parse(it) }
+        val result = processor.analyzeWithAlternatives(offer, alternatives, AnalysisSource.ACCESSIBILITY) ?: return
         Log.i(
             TAG,
-            "LIVE tree_read blocks=${snapshot.blocks.size} readMs=${elapsedMs(startedAtNanos)} " +
-                "sinceEventMs=${elapsedMs(receivedAtNanos)}",
+            "LIVE tree_read blocks=${snapshot.blocks.size} alts=${alternatives.size} " +
+                "readMs=${elapsedMs(startedAtNanos)} sinceEventMs=${elapsedMs(receivedAtNanos)}",
         )
         // A complete accessibility read is authoritative. OCR is a fallback only and must not
         // keep a screenshot burst alive after the tree supplied a ready offer.
