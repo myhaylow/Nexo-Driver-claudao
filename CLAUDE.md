@@ -4,17 +4,7 @@ App Android para motoristas Uber/99: lê ofertas de corrida via OCR local (Media
 on-device), calcula R$/km, R$/h, nota, tempo e distância, e mostra um overlay de análise sobre a
 tela. `namespace`/`applicationId`: `br.com.nexo.driver`.
 
-## Regras inegociáveis
 
-- **Nunca automatizar aceitar ou recusar corrida.** O app só lê texto (OCR) e desenha um overlay
-  informativo. Não usar `AccessibilityService` para `performAction`/`dispatchGesture`, não simular
-  toques em apps de terceiros. `overlay/WindowManagerOfferOverlay.kt` deve permanecer
-  `FLAG_NOT_TOUCHABLE`.
-- **Nada sai do dispositivo.** Sem permissão `INTERNET` no manifest, sem SDKs de rede/analytics
-  (Retrofit, OkHttp, Ktor, Firebase, Crashlytics, etc.). OCR, parsing e cálculo são 100% locais.
-  Qualquer nova dependência que implique tráfego de rede deve ser discutida antes de ser adicionada.
-- **Sem persistência sensível em backup.** `res/xml/backup_rules.xml` e
-  `res/xml/data_extraction_rules.xml` excluem todos os domínios — manter assim.
 
 ## Arquitetura (módulo único `:app`)
 
