@@ -1,0 +1,4 @@
+# Offline data packs are parsed by strict codecs that reject CRLF
+# (OfflineAddressPackageTsvCodec fails on '\r'). Force LF on checkout so a
+# Windows clone (core.autocrlf=true) cannot corrupt a pack into CRLF.
+*.tsv text eol=lf
