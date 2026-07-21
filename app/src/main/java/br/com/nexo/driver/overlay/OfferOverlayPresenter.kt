@@ -137,6 +137,10 @@ class OfferOverlayPresenter(
             val km = metric.observedValue?.let { metric.rule.metric.formatValue(it) }
             return if (km != null) "R$/km $km compensa a hora" else "R$/km forte compensa a hora"
         }
+        if (this.reason == br.com.nexo.driver.evaluation.DecisionReason.PAYOUT_COMPENSATES_PICKUP) {
+            val payout = metric.observedValue?.let { metric.rule.metric.formatValue(it) }
+            return if (payout != null) "$payout compensa a retirada" else "Valor compensa a retirada"
+        }
         if (metric.status == MetricStatus.UNKNOWN) {
             return "${metric.rule.metric.label}: não foi possível ler"
         }

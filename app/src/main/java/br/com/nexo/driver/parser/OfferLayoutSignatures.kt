@@ -40,6 +40,34 @@ internal object OfferLayoutSignatures {
         "perfil premium",
     )
 
+    /**
+     * Resource-id anchors for the offer surfaces, taken from static analysis of the target APKs
+     * (Uber 4.588, 99 7.10.38 -- see docs/RELATORIO_CARDS_99_UBER.md).
+     *
+     * These complement the text markers above, which are the drift-prone surface: the ride apps
+     * can reword "Pgto. no app" or a service tier overnight, but a `RecyclerView`/container
+     * resource entry name is far stabler and, being a resource name rather than a code identifier,
+     * generally survives the target app's own R8. They are a *second* signal, never the only one:
+     * class names (`CardsTrayV2View`, `OrderShowViewV2`) are deliberately excluded because those
+     * come obfuscated in release DEX, and any single version can rename an entry -- so a miss here
+     * silently falls back to the text path rather than failing.
+     */
+    private val UBER_VIEW_ID_ANCHORS = listOf(
+        "driver_offers_job_board",
+        "upfront_offer",
+        "cards_tray",
+    )
+
+    /** 99 uses the DiDi `broadorder`/`ordershow`/`trippicker` surfaces and `eta_value_*` fields. */
+    private val NINETY_NINE_VIEW_ID_ANCHORS = listOf(
+        "broadorder",
+        "ordershow",
+        "trippicker",
+        "eta_value_pickup",
+        "eta_value_sendoff",
+        "eta_value_broad_order",
+    )
+
     /** Money on the card. Deliberately excludes the R$/km line, which is a rate and not a payout. */
     val PAYOUT = Regex("(?i)r\\$\\s*[\\d.]+(?:,[\\d]{1,2})?")
 
@@ -83,6 +111,29 @@ internal object OfferLayoutSignatures {
         hasNinetyNineMarker(text) -> OfferSource.NINETY_NINE
         hasUberMarker(text) -> OfferSource.UBER
         else -> null
+    }
+
+    /** Matches a node's `viewIdResourceName` (e.g. `com.ubercab.driver:id/ub__upfront_offer_...`). */
+    fun hasUberViewIdAnchor(viewId: String?): Boolean = matchesViewIdAnchor(viewId, UBER_VIEW_ID_ANCHORS)
+
+    fun hasNinetyNineViewIdAnchor(viewId: String?): Boolean =
+        matchesViewIdAnchor(viewId, NINETY_NINE_VIEW_ID_ANCHORS)
+
+    /**
+     * Resolves the platform from a single node's resource id. 99 is checked first for the same
+     * reason as [inferSource]: a 99 card floating over an open Uber map should read as 99.
+     */
+    fun sourceForViewId(viewId: String?): OfferSource? = when {
+        hasNinetyNineViewIdAnchor(viewId) -> OfferSource.NINETY_NINE
+        hasUberViewIdAnchor(viewId) -> OfferSource.UBER
+        else -> null
+    }
+
+    /** Compares only the entry name after `:id/`, so the app's package prefix never matters. */
+    private fun matchesViewIdAnchor(viewId: String?, anchors: List<String>): Boolean {
+        val entry = viewId?.substringAfterLast('/')?.lowercase() ?: return false
+        if (entry.isEmpty()) return false
+        return anchors.any(entry::contains)
     }
 
     /** Maps a layout hint string onto its source, keeping the hint vocabulary in one place. */

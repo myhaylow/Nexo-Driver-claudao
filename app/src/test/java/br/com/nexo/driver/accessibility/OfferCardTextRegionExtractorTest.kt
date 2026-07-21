@@ -135,4 +135,58 @@ class OfferCardTextRegionExtractorTest {
 
         assertEquals(null, result)
     }
+
+    @Test
+    fun `an Uber tray yields one window per card`() {
+        val windows = OfferCardTextRegionExtractor.extractAll(
+            rawLines = listOf(
+                "Mapa",
+                "UberX",
+                "R$ 13,58",
+                "R$ 1,29/km est.",
+                "3 min (1.2 km)",
+                "Retirada",
+                "19 minutos (9.3 km)",
+                "Destino",
+                "Selecionar",
+                "Comfort",
+                "R$ 24,00",
+                "R$ 1,80/km est.",
+                "5 min (2.0 km)",
+                "Retirada",
+                "25 minutos (12.0 km)",
+                "Destino",
+                "Selecionar",
+            ),
+            layoutHint = "uber",
+        )
+
+        assertEquals(2, windows.size)
+        assertTrue(windows.any { it.first() == "UberX" })
+        assertTrue(windows.any { it.first() == "Comfort" })
+        // Each window keeps only its own card's payout.
+        assertTrue(windows.first { it.first() == "UberX" }.contains("R$ 13,58"))
+        assertFalse(windows.first { it.first() == "UberX" }.contains("R$ 24,00"))
+    }
+
+    @Test
+    fun `a single card yields exactly one window and matches extract`() {
+        val lines = listOf(
+            "Mapa",
+            "Priority",
+            "R$ 23,11",
+            "R$ 1,76/km est.",
+            "5,00 (2)",
+            "14 min (6.6 km)",
+            "Rua 3, Ipê",
+            "11 minutos (6.5 km)",
+            "Rua Antônio Emílio Cumin",
+            "Selecionar",
+        )
+
+        val windows = OfferCardTextRegionExtractor.extractAll(lines, layoutHint = "uber")
+
+        assertEquals(1, windows.size)
+        assertEquals(OfferCardTextRegionExtractor.extract(lines, layoutHint = "uber"), windows.first())
+    }
 }

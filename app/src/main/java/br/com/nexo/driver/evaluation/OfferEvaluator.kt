@@ -21,6 +21,9 @@ const val DEFAULT_MINIMUM_COVERAGE_PERCENT = 40
 /** How far a R$/km must clear its target to compensate a below-target R$/h. */
 const val DEFAULT_STRONG_KM_BONUS = 0.10f
 
+/** How far the total payout must clear its target to compensate a slightly-too-long pickup. */
+const val DEFAULT_STRONG_PAYOUT_BONUS = 0.15f
+
 /**
  * How a metric's raw [Long] value relates to what a driver reads and types.
  *
@@ -226,6 +229,12 @@ enum class DecisionReason {
      * slightly weak per-hour one.
      */
     KM_COMPENSATES_HOUR,
+    /**
+     * A strong total payout rescued an offer whose pickup was only just over the driver's limit.
+     * The same relational shape as [KM_COMPENSATES_HOUR]: a genuinely good fare is worth a slightly
+     * longer drive to the passenger, which a per-rule weighted average cannot express on its own.
+     */
+    PAYOUT_COMPENSATES_PICKUP,
     /** Score landed in the middle band: neither clearly good nor clearly bad. */
     BORDERLINE,
     /** Score fell below the analyze bar. */
@@ -261,12 +270,18 @@ class OfferEvaluator(
      * minimum by 10%.
      */
     private val strongKmBonus: Float = DEFAULT_STRONG_KM_BONUS,
+    /**
+     * How far above its target the total payout must sit to compensate a NEAR (just-over-limit)
+     * pickup rule, as a fraction. 0.15 means the payout must clear its minimum by 15%.
+     */
+    private val strongPayoutBonus: Float = DEFAULT_STRONG_PAYOUT_BONUS,
 ) {
     init {
         require(confidenceThreshold in 0f..1f)
         require(acceptThreshold in analyzeThreshold..100)
         require(minimumCoveragePercent in 0..100)
         require(strongKmBonus >= 0f)
+        require(strongPayoutBonus >= 0f)
     }
 
     fun derive(offer: NormalizedOffer): DerivedMetrics {
@@ -356,18 +371,20 @@ class OfferEvaluator(
             weightedScore >= analyzeThreshold -> OfferDecision.ANALYZE to DecisionReason.BORDERLINE
             else -> OfferDecision.REJECT to DecisionReason.BELOW_TARGET
         }
-        // A strong R$/km can lift an offer whose R$/h is only just short. Applied only to a scored
-        // ANALYZE -- never over a hard block, a missing read, or low coverage -- so it can rescue a
-        // borderline offer but never a genuinely bad one. This is the relational judgement the
-        // weighted average cannot make on its own; unlike the sibling engine it carries no traffic
-        // guard, because the ride apps do not expose a traffic signal we could trust.
-        val (decision, reason) = if (base.first == OfferDecision.ANALYZE &&
-            base.second == DecisionReason.BORDERLINE &&
-            kmCompensatesHour(metrics)
-        ) {
-            OfferDecision.ACCEPT to DecisionReason.KM_COMPENSATES_HOUR
-        } else {
-            base
+        // A strong R$/km can lift an offer whose R$/h is only just short, and likewise a strong
+        // total payout can lift one whose pickup is only just too long. Both apply only to a scored
+        // BORDERLINE ANALYZE -- never over a hard block, a missing read, or low coverage -- so they
+        // rescue a borderline offer but never a genuinely bad one. These are the relational
+        // judgements the weighted average cannot make on its own; unlike the sibling engine neither
+        // carries a traffic guard, because the ride apps expose no traffic signal we could trust.
+        // R$/km is tried first: it speaks to trip quality, whereas the payout rule only offsets the
+        // cost of reaching the passenger.
+        val (decision, reason) = when {
+            base.first != OfferDecision.ANALYZE || base.second != DecisionReason.BORDERLINE -> base
+            kmCompensatesHour(metrics) -> OfferDecision.ACCEPT to DecisionReason.KM_COMPENSATES_HOUR
+            payoutCompensatesPickup(metrics) ->
+                OfferDecision.ACCEPT to DecisionReason.PAYOUT_COMPENSATES_PICKUP
+            else -> base
         }
         return EvaluationResult(
             metrics = metrics,
@@ -401,6 +418,28 @@ class OfferEvaluator(
     }
 
     /**
+     * True when a total-payout minimum passes strongly while a pickup rule (distance or duration,
+     * configured as a maximum) is NEAR -- just over its limit, inside its tolerance band. Requires
+     * both to be present, so it only fires when the driver actually filters on payout and pickup.
+     * The payout must clear its own target by [strongPayoutBonus]; the pickup must be NEAR, never
+     * FAIL, so a genuinely far pickup is never waved through.
+     */
+    private fun payoutCompensatesPickup(metrics: List<MetricEvaluation>): Boolean {
+        val payout = metrics.firstOrNull {
+            it.rule.metric == Metric.PAYOUT && it.rule.comparator == Comparator.AT_LEAST
+        } ?: return false
+        if (payout.status != MetricStatus.PASS) return false
+        val payoutTarget = payout.rule.target ?: return false
+        val payoutValue = payout.observedValue ?: return false
+        if (payoutValue < payoutTarget + (payoutTarget * strongPayoutBonus).toLong()) return false
+        return metrics.any {
+            (it.rule.metric == Metric.PICKUP_DISTANCE || it.rule.metric == Metric.PICKUP_DURATION) &&
+                it.rule.comparator == Comparator.AT_MOST &&
+                it.status == MetricStatus.NEAR
+        }
+    }
+
+    /**
      * Picks the single rule that best explains the verdict.
      *
      * Ordering matters more than it looks. An eliminatory failure always wins, since it alone
@@ -420,6 +459,10 @@ class OfferEvaluator(
         // showing -- not the per-hour that fell short.
         if (reason == DecisionReason.KM_COMPENSATES_HOUR) {
             metrics.firstOrNull { it.rule.metric == Metric.RATE_PER_KM }?.let { return it }
+        }
+        // Likewise, the payout is the number that carried the offer -- not the pickup that fell short.
+        if (reason == DecisionReason.PAYOUT_COMPENSATES_PICKUP) {
+            metrics.firstOrNull { it.rule.metric == Metric.PAYOUT }?.let { return it }
         }
         metrics.firstOrNull { it.rule.mode == EvaluationMode.ELIMINATORY && it.status == MetricStatus.FAIL }
             ?.let { return it }

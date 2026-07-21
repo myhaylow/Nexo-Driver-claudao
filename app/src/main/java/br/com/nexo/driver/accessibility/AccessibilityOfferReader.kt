@@ -4,6 +4,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import br.com.nexo.driver.ocr.OcrTextBlock
 import br.com.nexo.driver.ocr.OcrTextSnapshot
 import br.com.nexo.driver.offer.FieldSource
+import br.com.nexo.driver.offer.OfferSource
 import br.com.nexo.driver.parser.OfferLayoutSignatures
 
 /**
@@ -43,7 +44,24 @@ class AccessibilityOfferReader(
         val lines = mutableListOf<String>()
         val budget = TraversalBudget()
         extraText.forEach { value -> budget.add(value, lines) }
-        roots.forEach { root -> root.collectText(lines, budget, depth = 0) }
+        // Resource-id anchors are collected alongside the text: they resolve the provider even when
+        // the on-card text markers have drifted, which is the failure the text path cannot recover
+        // from on its own. See OfferLayoutSignatures.UBER_VIEW_ID_ANCHORS.
+        val viewIdSources = mutableSetOf<OfferSource>()
+        roots.forEach { root ->
+            root.collectText(lines, budget, depth = 0) { viewId ->
+                OfferLayoutSignatures.sourceForViewId(viewId)?.let(viewIdSources::add)
+            }
+        }
+        // The hint the caller passed (from the event's package) still wins; the view-id anchor only
+        // fills the gap when the caller had none. 99 precedes Uber for the split-screen reason in
+        // OfferLayoutSignatures.inferSource.
+        val viewIdHint = when {
+            OfferSource.NINETY_NINE in viewIdSources -> OfferLayoutSignatures.hintFor(OfferSource.NINETY_NINE)
+            OfferSource.UBER in viewIdSources -> OfferLayoutSignatures.hintFor(OfferSource.UBER)
+            else -> null
+        }
+        val effectiveHint = layoutHint ?: viewIdHint
         val flattened = lines.flatMap(String::lines).map(String::trim).filter(String::isNotEmpty)
         val diagnostics = AccessibilityReadDiagnostics(
             rootCount = roots.size,
@@ -51,8 +69,9 @@ class AccessibilityOfferReader(
             cardAnchorCount = flattened.count(::isOfferAnchor),
             payoutTokenCount = flattened.count { PAYOUT_TOKEN.containsMatchIn(it) },
             routeLegCount = flattened.count { ROUTE_LEG_TOKEN.containsMatchIn(it) },
+            viewIdAnchorCount = viewIdSources.size,
         )
-        val cardLines = OfferCardTextRegionExtractor.extract(lines, layoutHint)
+        val cardLines = OfferCardTextRegionExtractor.extract(lines, effectiveHint)
             ?: return AccessibilityReadResult(
                 snapshot = null,
                 diagnostics = diagnostics,
@@ -73,7 +92,7 @@ class AccessibilityOfferReader(
             snapshot = OcrTextSnapshot(
                 blocks = blocks,
                 capturedAtEpochMs = nowEpochMs(),
-                layoutHint = layoutHint ?: blocks.inferLayoutHint(),
+                layoutHint = effectiveHint ?: blocks.inferLayoutHint(),
                 fieldSource = FieldSource.ACCESSIBILITY,
             ),
             diagnostics = diagnostics,
@@ -92,15 +111,17 @@ class AccessibilityOfferReader(
         output: MutableList<String>,
         budget: TraversalBudget,
         depth: Int,
+        onViewId: ((String?) -> Unit)? = null,
     ) {
         if (!budget.visitNode(depth)) return
+        onViewId?.invoke(viewIdResourceName)
         text?.toString()?.let { value -> budget.add(value, output) }
         contentDescription?.toString()?.let { value -> budget.add(value, output) }
         if (depth >= MAX_TREE_DEPTH) return
         repeat(childCount) { index ->
             getChild(index)?.let { child ->
                 try {
-                    child.collectText(output, budget, depth + 1)
+                    child.collectText(output, budget, depth + 1, onViewId)
                 } finally {
                     child.recycle()
                 }
@@ -162,6 +183,8 @@ data class AccessibilityReadDiagnostics(
     val cardAnchorCount: Int,
     val payoutTokenCount: Int,
     val routeLegCount: Int,
+    /** How many providers were identified purely from a resource-id anchor this read. */
+    val viewIdAnchorCount: Int = 0,
 )
 
 /** Identifies the provider from the event owner even when a Compose card omits its brand label. */
