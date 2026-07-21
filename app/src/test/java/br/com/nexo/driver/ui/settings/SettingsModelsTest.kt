@@ -13,19 +13,19 @@ class SettingsModelsTest {
         val choices = OverlayPreferences.DEFAULT.availableFieldsFor(OverlaySlot.TOP_START)
 
         assertEquals(OverlayMetricField.RATE_PER_KM, choices.first())
-        // Fields already used by the default grid are hidden from other slots.
+        // Fields already used by the default (mockup) grid are hidden from other slots.
         assertFalse(OverlayMetricField.RATE_PER_HOUR in choices)
-        assertFalse(OverlayMetricField.PASSENGER_RATING in choices)
+        assertFalse(OverlayMetricField.NET_PROFIT_PERCENT in choices)
         assertFalse(OverlayMetricField.NET_PROFIT in choices)
         assertEquals(
             setOf(
                 OverlayMetricField.RATE_PER_KM,
                 OverlayMetricField.RATE_PER_MINUTE,
+                OverlayMetricField.PASSENGER_RATING,
                 OverlayMetricField.PICKUP,
                 OverlayMetricField.TOTAL_DURATION,
                 OverlayMetricField.TOTAL_DISTANCE,
                 OverlayMetricField.PAYOUT,
-                OverlayMetricField.NET_PROFIT_PERCENT,
                 OverlayMetricField.NET_PROFIT_PER_HOUR,
             ),
             choices.toSet(),

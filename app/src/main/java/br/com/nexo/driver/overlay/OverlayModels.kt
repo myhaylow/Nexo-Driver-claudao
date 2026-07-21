@@ -3,6 +3,13 @@ package br.com.nexo.driver.overlay
 import br.com.nexo.driver.overlay.preferences.OverlayMetricField
 import br.com.nexo.driver.overlay.preferences.OverlayPreferences
 
+/** Posições/formatos do card do overlay, como desenhados no mockup (Topo/Horizontal/Vertical). */
+enum class OverlayLayoutStyle(val label: String) {
+    TOPO("Topo"),
+    HORIZONTAL("Horizontal"),
+    VERTICAL("Vertical"),
+}
+
 /** The evaluation state used by the compact on-screen offer overlay. */
 enum class OverlayStatus {
     ACCEPT,
@@ -58,8 +65,8 @@ data class OfferOverlayUiModel(
     val alternatives: List<OverlayAlternativeUi> = emptyList(),
 ) {
     init {
-        require(gridFields.size == 4 && gridFields.distinct().size == 4) {
-            "The overlay grid must contain exactly four distinct fields."
+        require(gridFields.size in 3..4 && gridFields.distinct().size == gridFields.size) {
+            "The overlay grid must contain three or four distinct fields."
         }
     }
 

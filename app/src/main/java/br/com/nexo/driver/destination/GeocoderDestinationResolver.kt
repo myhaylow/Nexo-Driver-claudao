@@ -60,8 +60,22 @@ class GeocoderDestinationResolver(
         if (!Geocoder.isPresent()) return failed(input, DestinationResolutionStatus.UNAVAILABLE, timestamp)
         val query = if (input.contains("Brasil", ignoreCase = true)) input else "$input, Brasil"
         return runCatching {
+            val geocoder = Geocoder(appContext, Locale("pt", "BR"))
+            // Primeira passada restrita a Curitiba e Região Metropolitana: "Rua XV de Novembro"
+            // existe em dezenas de cidades, e sem o viés o geocoder devolve qualquer uma delas.
+            // Se nada existir na região (motorista viajando), a segunda passada é irrestrita.
             @Suppress("DEPRECATION")
-            val address = Geocoder(appContext, Locale("pt", "BR")).getFromLocationName(query, 1)?.firstOrNull()
+            val regional = geocoder.getFromLocationName(
+                query,
+                1,
+                CuritibaRegionLocalities.BOUNDS_SOUTH_LATITUDE,
+                CuritibaRegionLocalities.BOUNDS_WEST_LONGITUDE,
+                CuritibaRegionLocalities.BOUNDS_NORTH_LATITUDE,
+                CuritibaRegionLocalities.BOUNDS_EAST_LONGITUDE,
+            )?.firstOrNull()
+
+            @Suppress("DEPRECATION")
+            val address = regional ?: geocoder.getFromLocationName(query, 1)?.firstOrNull()
             if (address == null) failed(input, DestinationResolutionStatus.FAILED, timestamp)
             else DestinationResolution(input, address.toStandardizedAddress(), GeoCoordinate(address.latitude, address.longitude), DestinationResolutionStatus.RESOLVED, timestamp)
         }.getOrElse { failed(input, DestinationResolutionStatus.UNAVAILABLE, timestamp) }

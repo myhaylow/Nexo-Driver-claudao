@@ -294,6 +294,8 @@ class OfferCaptureService : Service() {
                     themeMode = appearance.themeMode,
                     fontScale = appearance.fontScale,
                     visualStyle = appearance.visualStyle,
+                    overlayFontScale = appearance.overlayFontScale,
+                    overlayLayout = appearance.overlayLayout,
                 )
             }
                 .onSuccess {
@@ -323,6 +325,8 @@ class OfferCaptureService : Service() {
                                         themeMode = update.appearance.themeMode,
                                         fontScale = update.appearance.fontScale,
                                         visualStyle = update.appearance.visualStyle,
+                                        overlayFontScale = update.appearance.overlayFontScale,
+                                        overlayLayout = update.appearance.overlayLayout,
                                     )
                                 }.onFailure { failure ->
                                     Log.w(TAG, "Late destination enrichment could not update overlay.", failure)

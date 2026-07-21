@@ -11,8 +11,13 @@ object OfflineAddressNormalizer {
     private val leadingStreetAbbreviations = mapOf(
         "r" to "rua",
         "av" to "avenida",
+        "al" to "alameda",
+        "pca" to "praca",
+        "pc" to "praca",
         "rod" to "rodovia",
+        "est" to "estrada",
         "estr" to "estrada",
+        "tv" to "travessa",
         "trav" to "travessa",
     )
 
@@ -31,7 +36,13 @@ object OfflineAddressNormalizer {
             !(token == "n" && rawTokens.getOrNull(index + 1)?.all(Char::isDigit) == true)
         }.toMutableList()
         if (tokens.isNotEmpty()) tokens[0] = leadingStreetAbbreviations[tokens[0]] ?: tokens[0]
-        return tokens.joinToString(" ")
+        // Os apps anexam ", Curitiba - PR, Brasil" ao endereço; o pacote offline guarda o
+        // logradouro puro. Remover o sufixo de localidade faz os dois lados baterem exatamente.
+        val withoutLocalities =
+            br.com.nexo.driver.destination.CuritibaRegionLocalities.stripTrailingLocalities(tokens)
+        // Um endereço que era SÓ a localidade não pode virar chave vazia ambígua: mantém como era.
+        val effective = withoutLocalities.ifEmpty { tokens }
+        return effective.joinToString(" ")
     }
 }
 

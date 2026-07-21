@@ -6,17 +6,31 @@ import org.junit.Test
 
 class OverlayPreferencesTest {
     @Test
-    fun `default grid matches the reference card layout`() {
+    fun `default grid matches the mockup card layout`() {
+        // Visual do mockup: a nota fica no rodapé, então a grade não repete a avaliação.
         assertEquals(
             listOf(
                 OverlayMetricField.RATE_PER_KM,
                 OverlayMetricField.RATE_PER_HOUR,
-                OverlayMetricField.PASSENGER_RATING,
+                OverlayMetricField.NET_PROFIT_PERCENT,
                 OverlayMetricField.NET_PROFIT,
             ),
             OverlayPreferences.DEFAULT.fields,
         )
         assertEquals(4, OverlayPreferences.DEFAULT.fields.distinct().size)
+    }
+
+    @Test
+    fun `three field grids are allowed for the mockup field count toggle`() {
+        val threeFields = OverlayPreferences(
+            listOf(
+                OverlayMetricField.RATE_PER_KM,
+                OverlayMetricField.RATE_PER_HOUR,
+                OverlayMetricField.NET_PROFIT,
+            ),
+        )
+        assertEquals(3, threeFields.fields.size)
+        assertEquals(threeFields, OverlayPreferencesCodec.decode(OverlayPreferencesCodec.encode(threeFields)))
     }
 
     @Test(expected = IllegalArgumentException::class)

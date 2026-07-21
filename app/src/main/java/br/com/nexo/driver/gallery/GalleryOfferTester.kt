@@ -70,6 +70,8 @@ class GalleryOfferTester(context: Context) : Closeable {
                                 themeMode = analysis.appearance.themeMode,
                                 fontScale = analysis.appearance.fontScale,
                                 visualStyle = analysis.appearance.visualStyle,
+                                overlayFontScale = analysis.appearance.overlayFontScale,
+                                overlayLayout = analysis.appearance.overlayLayout,
                             )
                             true
                         }

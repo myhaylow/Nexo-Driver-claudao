@@ -7,6 +7,7 @@ import br.com.nexo.driver.analysis.MAX_CARD_DURATION_MS
 import br.com.nexo.driver.analysis.MIN_CARD_DURATION_MS
 import br.com.nexo.driver.evaluation.DEFAULT_ACCEPT_THRESHOLD
 import br.com.nexo.driver.evaluation.DEFAULT_ANALYZE_THRESHOLD
+import br.com.nexo.driver.overlay.OverlayLayoutStyle
 import br.com.nexo.driver.ui.theme.ColorVisionScheme
 import br.com.nexo.driver.ui.theme.DriverThemeMode
 import br.com.nexo.driver.ui.theme.DriverVisualStyle
@@ -31,11 +32,24 @@ data class AppSettings(
     val cardDurationMs: Long = DEFAULT_CARD_DURATION_MS,
     val acceptThreshold: Int = DEFAULT_ACCEPT_THRESHOLD,
     val analyzeThreshold: Int = DEFAULT_ANALYZE_THRESHOLD,
+    /** Multiplies only the overlay card's text size, independent of the app-wide font scale. */
+    val overlayFontScale: Float = DEFAULT_OVERLAY_FONT_SCALE,
+    /** Layout do card do overlay, como desenhado no mockup. */
+    val overlayLayout: OverlayLayoutStyle = OverlayLayoutStyle.TOPO,
 ) {
     init {
         require(analyzeThreshold <= acceptThreshold) {
             "The analyze threshold cannot exceed the accept threshold."
         }
+        require(overlayFontScale in MIN_OVERLAY_FONT_SCALE..MAX_OVERLAY_FONT_SCALE) {
+            "The overlay font scale must be within [$MIN_OVERLAY_FONT_SCALE, $MAX_OVERLAY_FONT_SCALE]."
+        }
+    }
+
+    companion object {
+        const val DEFAULT_OVERLAY_FONT_SCALE = 1f
+        const val MIN_OVERLAY_FONT_SCALE = 0.8f
+        const val MAX_OVERLAY_FONT_SCALE = 1.6f
     }
 }
 
@@ -55,6 +69,9 @@ class AppSettingsStore private constructor(private val preferences: SharedPrefer
             // data class invariant and crash the settings screen on launch.
             analyzeThreshold = preferences.getInt(KEY_ANALYZE_THRESHOLD, DEFAULT_ANALYZE_THRESHOLD)
                 .coerceIn(0, accept),
+            overlayFontScale = preferences.getFloat(KEY_OVERLAY_FONT_SCALE, AppSettings.DEFAULT_OVERLAY_FONT_SCALE)
+                .coerceIn(AppSettings.MIN_OVERLAY_FONT_SCALE, AppSettings.MAX_OVERLAY_FONT_SCALE),
+            overlayLayout = preferences.readEnum(KEY_OVERLAY_LAYOUT, OverlayLayoutStyle.entries, OverlayLayoutStyle.TOPO),
         )
     }
 
@@ -67,6 +84,8 @@ class AppSettingsStore private constructor(private val preferences: SharedPrefer
             .putLong(KEY_CARD_DURATION_MS, settings.cardDurationMs)
             .putInt(KEY_ACCEPT_THRESHOLD, settings.acceptThreshold)
             .putInt(KEY_ANALYZE_THRESHOLD, settings.analyzeThreshold)
+            .putFloat(KEY_OVERLAY_FONT_SCALE, settings.overlayFontScale)
+            .putString(KEY_OVERLAY_LAYOUT, settings.overlayLayout.name)
             .apply()
         return settings
     }
@@ -84,6 +103,8 @@ class AppSettingsStore private constructor(private val preferences: SharedPrefer
         const val KEY_CARD_DURATION_MS = "overlay_card_duration_ms"
         const val KEY_ACCEPT_THRESHOLD = "decision_accept_threshold"
         const val KEY_ANALYZE_THRESHOLD = "decision_analyze_threshold"
+        const val KEY_OVERLAY_FONT_SCALE = "overlay_font_scale"
+        const val KEY_OVERLAY_LAYOUT = "overlay_layout_style"
 
         fun create(context: Context): AppSettingsStore = AppSettingsStore(
             context.applicationContext.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE),

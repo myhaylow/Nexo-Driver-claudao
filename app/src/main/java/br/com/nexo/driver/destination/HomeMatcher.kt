@@ -124,8 +124,12 @@ class HomeMatcher {
         val normalized = java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
             .replace(Regex("\\p{M}+"), "")
             .lowercase()
-        val tokens = normalized.split(Regex("[^a-z0-9]+"))
+        val rawTokens = normalized.split(Regex("[^a-z0-9]+"))
             .filter { it.isNotBlank() }
+        // "..., São José dos Pinhais - PR, Brasil" no fim do endereço é localidade, não casa.
+        // Sem essa remoção, os tokens da cidade ("sao", "jose", "pinhais") pontuam como se
+        // fossem a rua e uma oferta para o centro da cidade casaria com uma casa qualquer.
+        val tokens = CuritibaRegionLocalities.stripTrailingLocalities(rawTokens).ifEmpty { rawTokens }
         val hasStreetDesignator = tokens.any { it in ADDRESS_STRUCTURE_TOKENS }
         val relevant = tokens.filter { token ->
             token.length >= 2 && token !in ADDRESS_STRUCTURE_TOKENS && token !in LOCALITY_ONLY_TOKENS

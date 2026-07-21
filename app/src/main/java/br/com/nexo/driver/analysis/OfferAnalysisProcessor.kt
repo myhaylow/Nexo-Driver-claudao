@@ -159,6 +159,22 @@ class OfferAnalysisProcessor(
                     .mapNotNull { m -> m.observedValue?.let { m.rule.metric to it } }
                     .toMap(),
             )
+            // Alimenta o histórico da Início: números + veredito, nunca endereço ou texto de OCR.
+            OfferHistoryRepository.record(
+                OfferHistoryEntry(
+                    provider = enrichedOffer.serviceType.value?.takeIf { it.isNotBlank() }
+                        ?: when (enrichedOffer.source) {
+                            br.com.nexo.driver.offer.OfferSource.UBER -> "Uber"
+                            br.com.nexo.driver.offer.OfferSource.NINETY_NINE -> "99"
+                        },
+                    payoutCents = enrichedOffer.payout.value?.cents,
+                    totalDistanceMeters = derived.totalDistance.value?.meters,
+                    totalDurationSeconds = derived.totalDuration.value?.seconds,
+                    ratePerKmCents = derived.ratePerKm.value,
+                    status = overlay.status,
+                    atEpochMs = System.currentTimeMillis(),
+                ),
+            )
         }
         if (allowSideEffects && settings.speakDecision) {
             speaker?.speak(overlay)
@@ -336,6 +352,8 @@ class OfferAnalysisProcessor(
         visualStyle = settings.visualStyle,
         colorVisionScheme = settings.colorVisionScheme,
         cardDurationMs = settings.cardDurationMs,
+        overlayFontScale = settings.overlayFontScale,
+        overlayLayout = settings.overlayLayout,
     )
 
     /** User-tunable decision thresholds, mirroring what comparable apps expose as good/bad bands. */
@@ -379,6 +397,11 @@ data class OverlayAppearance(
     val colorVisionScheme: ColorVisionScheme = ColorVisionScheme.NORMAL,
     /** How long the card stays on screen. Uber's own offer sheet can outlast the old fixed 8s. */
     val cardDurationMs: Long = DEFAULT_CARD_DURATION_MS,
+    /** Overlay-only text scale, applied on top of the theme's font scale. */
+    val overlayFontScale: Float = 1f,
+    /** Formato do card (Topo/Horizontal/Vertical), como no mockup. */
+    val overlayLayout: br.com.nexo.driver.overlay.OverlayLayoutStyle =
+        br.com.nexo.driver.overlay.OverlayLayoutStyle.TOPO,
 )
 
 const val DEFAULT_CARD_DURATION_MS = 12_000L

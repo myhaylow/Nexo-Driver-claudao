@@ -17,12 +17,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import android.text.TextUtils
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -30,56 +24,54 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import br.com.nexo.driver.capture.OfferCaptureService
+import br.com.nexo.driver.analysis.OfferHistoryRepository
 import br.com.nexo.driver.analysis.OfferSessionMetricsRepository
+import br.com.nexo.driver.analysis.SessionTelemetryRepository
 import br.com.nexo.driver.destination.DriverDestination
+import br.com.nexo.driver.destination.FavoriteDestinations
 import br.com.nexo.driver.destination.SharedPreferencesDriverDestinationStore
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import br.com.nexo.driver.destination.SharedPreferencesFavoriteDestinationsStore
 import br.com.nexo.driver.evaluation.Comparator
 import br.com.nexo.driver.evaluation.FilterRule
 import br.com.nexo.driver.evaluation.Metric
-import br.com.nexo.driver.evaluation.RuleBlocker
-import br.com.nexo.driver.evaluation.RulePrerequisites
 import br.com.nexo.driver.profile.DriverProfile
 import br.com.nexo.driver.profile.SharedPreferencesProfileStore
 import br.com.nexo.driver.overlay.preferences.SharedPreferencesOverlayPreferenceStore
-import br.com.nexo.driver.overlay.preferences.SharedPreferencesOverlayPositionStore
 import br.com.nexo.driver.offline.SharedPreferencesOfflineMapPackageStore
 import br.com.nexo.driver.permission.CaptureSessionId
 import br.com.nexo.driver.permission.PermissionGrant
 import br.com.nexo.driver.permission.PermissionReadinessEvaluator
 import br.com.nexo.driver.permission.PermissionState
 import br.com.nexo.driver.permission.PermissionStateReducer
-import br.com.nexo.driver.ui.filters.FiltersScreen
-import br.com.nexo.driver.ui.filters.FiltersScreenState
 import br.com.nexo.driver.ui.filters.FilterRuleEditorSheet
 import br.com.nexo.driver.ui.filters.FilterPickerSheet
 import br.com.nexo.driver.ui.filters.FilterRuleId
 import br.com.nexo.driver.ui.filters.id
 import br.com.nexo.driver.ui.destination.HomeDestinationScreen
-import br.com.nexo.driver.ui.home.HomeScreen
-import br.com.nexo.driver.ui.home.HomeScreenState
 import br.com.nexo.driver.ui.permission.PermissionOnboardingActions
 import br.com.nexo.driver.ui.permission.PermissionOnboardingSheet
 import br.com.nexo.driver.ui.settings.AppSettings
 import br.com.nexo.driver.ui.settings.AppSettingsStore
-import br.com.nexo.driver.ui.settings.SettingsScreen
-import br.com.nexo.driver.ui.settings.SettingsScreenState
 import br.com.nexo.driver.block.SharedPreferencesBlockSettingsStore
 import br.com.nexo.driver.cost.SharedPreferencesFuelSettingsStore
 import br.com.nexo.driver.speech.SharedPreferencesSpeechSettingsStore
 import br.com.nexo.driver.speech.SpeechSettings
 import br.com.nexo.driver.ui.theme.DriverInteligenteTheme
+import br.com.nexo.driver.ui.theme.NexoAppTheme
+import br.com.nexo.driver.ui.mockup.MockupShellActions
+import br.com.nexo.driver.ui.mockup.MockupShellState
+import br.com.nexo.driver.ui.mockup.MockupTab
+import br.com.nexo.driver.ui.mockup.NexoMockupShell
+import br.com.nexo.driver.location.CurrentLocationServiceStatus
+import br.com.nexo.driver.overlay.preferences.OverlayPreferences
 import br.com.nexo.driver.accessibility.DriverAccessibilityService
 import br.com.nexo.driver.gallery.GalleryOfferTester
 import br.com.nexo.driver.gallery.message
-import br.com.nexo.driver.R
 import br.com.nexo.driver.BuildConfig
 import br.com.nexo.driver.location.CurrentLocationService
 import br.com.nexo.driver.location.CurrentLocationState
@@ -105,8 +97,6 @@ fun NexoApp() {
     var overlayPreferences by remember(overlayPreferencesStore) {
         mutableStateOf(overlayPreferencesStore.load())
     }
-    val overlayPositionStore = remember(context) { SharedPreferencesOverlayPositionStore.create(context) }
-    var overlayPosition by remember(overlayPositionStore) { mutableStateOf(overlayPositionStore.load()) }
     val speechSettingsStore = remember(context) { SharedPreferencesSpeechSettingsStore.create(context) }
     var speechSettings by remember(speechSettingsStore) {
         mutableStateOf(speechSettingsStore.load())
@@ -144,6 +134,15 @@ fun NexoApp() {
     val profileStore = remember(context) { SharedPreferencesProfileStore.create(context) }
     val homeDestinationStore = remember(context) { SharedPreferencesDriverDestinationStore.create(context) }
     var homeDestination by remember(homeDestinationStore) { mutableStateOf(homeDestinationStore.load()) }
+    val favoritesStore = remember(context) { SharedPreferencesFavoriteDestinationsStore.create(context) }
+    var favoriteDestinations by remember(favoritesStore) {
+        val loaded = favoritesStore.load()
+        // Migração: quem já tinha um destino único ganha ele como primeiro favorito.
+        val seeded = homeDestination?.takeIf { loaded.destinations.isEmpty() }
+            ?.let { favoritesStore.save(FavoriteDestinations(listOf(it), 0)) }
+            ?: loaded
+        mutableStateOf(seeded)
+    }
     val offlineMapPackageStore = remember(context) { SharedPreferencesOfflineMapPackageStore.create(context) }
     var offlineMapPackage by remember(offlineMapPackageStore) {
         mutableStateOf(offlineMapPackageStore.load())
@@ -167,6 +166,7 @@ fun NexoApp() {
     var readerEnabled by remember { mutableStateOf(OfferCaptureService.isActive(context)) }
     var locationSnapshot by remember { mutableStateOf(CurrentLocationStateRepository.current()) }
     var sessionMetrics by remember { mutableStateOf(OfferSessionMetricsRepository.current()) }
+    var offerHistory by remember { mutableStateOf(OfferHistoryRepository.current()) }
     var showPermissionOnboarding by remember { mutableStateOf(false) }
     var captureSessionId by remember { mutableStateOf(newCaptureSessionId()) }
     val permissionReducer = remember { PermissionStateReducer() }
@@ -178,9 +178,11 @@ fun NexoApp() {
     DisposableEffect(Unit) {
         val locationSubscription = CurrentLocationStateRepository.subscribe { snapshot -> locationSnapshot = snapshot }
         val offerSubscription = OfferSessionMetricsRepository.subscribe { metrics -> sessionMetrics = metrics }
+        val historySubscription = OfferHistoryRepository.subscribe { entries -> offerHistory = entries }
         onDispose {
             locationSubscription.close()
             offerSubscription.close()
+            historySubscription.close()
         }
     }
 
@@ -307,6 +309,7 @@ fun NexoApp() {
         visualStyle = appSettings.visualStyle,
         colorVisionScheme = appSettings.colorVisionScheme,
     ) {
+      NexoAppTheme {
         when (destination) {
             AppDestination.HOME_DESTINATION -> HomeDestinationScreen(
                 currentDestination = homeDestination,
@@ -314,15 +317,31 @@ fun NexoApp() {
                 onNavigateBack = { destination = AppDestination.HOME },
                 onSave = { selected ->
                     homeDestination = homeDestinationStore.save(selected)
+                    favoriteDestinations = favoritesStore.save(favoriteDestinations.withUpdatedActive(selected))
                     destination = AppDestination.HOME
                 },
                 onDraftChanged = { draft ->
                     homeDestination = homeDestinationStore.save(draft)
+                    favoriteDestinations = favoritesStore.save(favoriteDestinations.withUpdatedActive(draft))
                 },
                 onClear = {
-                    homeDestinationStore.clear()
-                    homeDestination = null
-                    destination = AppDestination.HOME
+                    favoriteDestinations = favoritesStore.save(favoriteDestinations.withRemovedActive())
+                    homeDestination = favoriteDestinations.active?.let(homeDestinationStore::save)
+                        ?: run {
+                            homeDestinationStore.clear()
+                            null
+                        }
+                    if (favoriteDestinations.destinations.isEmpty()) destination = AppDestination.HOME
+                },
+                favorites = favoriteDestinations,
+                onSelectFavorite = { index ->
+                    favoriteDestinations = favoritesStore.save(favoriteDestinations.withActive(index))
+                    favoriteDestinations.active?.let { homeDestination = homeDestinationStore.save(it) }
+                },
+                onAddFavorite = {
+                    val novo = DriverDestination(label = "Novo destino", enabled = false)
+                    favoriteDestinations = favoritesStore.save(favoriteDestinations.withAdded(novo))
+                    favoriteDestinations.active?.let { homeDestination = homeDestinationStore.save(it) }
                 },
                 onOfflineMapImported = { selected ->
                     offlineMapPackage
@@ -337,202 +356,186 @@ fun NexoApp() {
                 },
             )
 
-            AppDestination.FILTERS -> FiltersScreen(
-                state = FiltersScreenState(
+            AppDestination.HOME, AppDestination.FILTERS, AppDestination.SETTINGS -> NexoMockupShell(
+                tab = when (destination) {
+                    AppDestination.FILTERS -> MockupTab.FILTERS
+                    AppDestination.SETTINGS -> MockupTab.SETTINGS
+                    else -> MockupTab.HOME
+                },
+                onTabChange = { selected ->
+                    destination = when (selected) {
+                        MockupTab.HOME -> AppDestination.HOME
+                        MockupTab.FILTERS -> AppDestination.FILTERS
+                        MockupTab.SETTINGS -> AppDestination.SETTINGS
+                    }
+                },
+                state = MockupShellState(
+                    readerEnabled = accessibilityServiceEnabled || readerEnabled,
+                    readerStatusText = readerStatusText(accessibilityServiceEnabled, readerEnabled, Settings.canDrawOverlays(context)),
                     profileName = activeProfile.name,
-                    isProfileEnabled = activeProfile.isEnabled,
+                    profileEnabled = activeProfile.isEnabled,
                     rules = activeProfile.rules,
-                    // Read from the same stores the analysis path uses, so a rule is marked
-                    // inactive on exactly the condition that makes it unresolvable at runtime.
-                    prerequisites = RulePrerequisites(
-                        hasHomeDestination = homeDestination != null,
-                        hasOfflineAddressPackage = offlineMapPackage != null,
-                        isBlocklistEnabled = blockSettings.blockSupermarkets,
+                    sessionKm = locationSnapshot.sessionDistanceMeters / 1_000.0,
+                    locationEnabled = locationSnapshot.status in setOf(
+                        CurrentLocationServiceStatus.ACQUIRING,
+                        CurrentLocationServiceStatus.ACTIVE,
+                        CurrentLocationServiceStatus.FIX_REJECTED,
+                        CurrentLocationServiceStatus.MOVEMENT_REJECTED,
                     ),
+                    fuelPriceCents = fuelSettings.pricePerLiterCents,
+                    fuelKmPerLiter = fuelSettings.kilometersPerLiter,
+                    overlayFields = overlayPreferences.fields,
+                    overlayLayout = appSettings.overlayLayout,
+                    overlayFontScale = appSettings.overlayFontScale,
+                    homeDestinationName = homeDestination?.displayName(),
+                    galleryTestStatus = galleryTestStatus,
+                    showDebugTools = BuildConfig.DEBUG,
+                    accessibilityEnabled = accessibilityServiceEnabled,
+                    speakDecision = speechSettings.speakDecision,
+                    blockSupermarkets = blockSettings.blockSupermarkets,
+                    history = offerHistory,
+                    readMetrics = sessionMetrics,
+                    overlayPermissionGranted = Settings.canDrawOverlays(context),
+                    sessionStartEpochMs = SessionTelemetryRepository.currentSessionStart(),
+                    acceptThreshold = appSettings.acceptThreshold,
+                    analyzeThreshold = appSettings.analyzeThreshold,
+                    cardDurationMs = appSettings.cardDurationMs,
                 ),
-                onBlockerAction = { blocker ->
-                    destination = when (blocker) {
-                        RuleBlocker.MISSING_HOME_DESTINATION,
-                        RuleBlocker.MISSING_OFFLINE_ADDRESS_PACKAGE,
-                        -> AppDestination.HOME_DESTINATION
-                        RuleBlocker.BLOCKLIST_DISABLED -> AppDestination.SETTINGS
-                    }
-                },
-                onNavigateBack = {
-                    editingRuleId = null
-                    destination = AppDestination.HOME
-                },
-                onProfileEnabledChange = { enabled ->
-                    updateActiveProfile { profile ->
-                        profile.updated(isEnabled = enabled, updatedAtEpochMs = System.currentTimeMillis())
-                    }
-                },
-                onRuleEnabledChange = { ruleId, enabled ->
-                    updateActiveProfile { profile ->
-                        profile.updated(
-                            rules = profile.rules.map { rule ->
-                                if (rule.id == ruleId) rule.copy(enabled = enabled) else rule
-                            },
-                            updatedAtEpochMs = System.currentTimeMillis(),
-                        )
-                    }
-                },
-                onRuleClick = { ruleId -> editingRuleId = ruleId },
-                onAddFilter = {
-                    showFilterPicker = true
-                },
-                bottomBar = {
-                    DriverBottomBar(selected = AppDestination.FILTERS, onSelected = { destination = it })
-                },
-            )
-
-            AppDestination.HOME, AppDestination.SETTINGS -> Scaffold(
-                bottomBar = {
-                    DriverBottomBar(selected = destination, onSelected = { destination = it })
-                },
-            ) { padding ->
-                when (destination) {
-                    AppDestination.HOME -> HomeScreen(
-                        state = HomeScreenState(
-                            readerEnabled = accessibilityServiceEnabled || readerEnabled,
-                            readerStatusText = readerStatusText(accessibilityServiceEnabled, readerEnabled, Settings.canDrawOverlays(context)),
-                            activeProfileName = activeProfile.name,
-                            activeProfileSummary = activeProfile.rules.conciseProfileSummary(),
-                            homeDestination = homeDestination?.displayName(),
-                            homeDestinationDetails = homeDestination?.displayDetails(),
-                            kilometresAnalyzed = locationSnapshot.sessionDistanceMeters / 1_000.0,
-                            offersEvaluated = sessionMetrics.offersEvaluated,
-                            readMetrics = sessionMetrics,
-                            location = locationSnapshot,
-                        ),
-                        onReaderEnabledChanged = { enabled ->
-                            if (!enabled) {
-                                OfferCaptureService.stop(context)
-                                readerEnabled = false
-                                permissionState = permissionReducer.clearMediaProjection(permissionState)
-                                captureSessionId = newCaptureSessionId()
-                                if (accessibilityServiceEnabled) {
-                                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                                }
-                            } else {
-                                captureSessionId = newCaptureSessionId()
-                                permissionState = permissionReducer.clearMediaProjection(permissionState)
-                                showPermissionOnboarding = true
+                actions = MockupShellActions(
+                    onReaderToggle = { enabled ->
+                        if (!enabled) {
+                            OfferCaptureService.stop(context)
+                            readerEnabled = false
+                            permissionState = permissionReducer.clearMediaProjection(permissionState)
+                            captureSessionId = newCaptureSessionId()
+                            if (accessibilityServiceEnabled) {
+                                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                             }
-                        },
-                        onOpenFilters = { destination = AppDestination.FILTERS },
-                        onConfigureHome = { destination = AppDestination.HOME_DESTINATION },
-                        onLocationEnabledChanged = { enabled ->
-                            if (!enabled) {
-                                CurrentLocationService.stop(context)
-                            } else {
-                                val fineGranted = ContextCompat.checkSelfPermission(
-                                    context,
-                                    Manifest.permission.ACCESS_FINE_LOCATION,
-                                ) == PackageManager.PERMISSION_GRANTED
-                                val coarseGranted = ContextCompat.checkSelfPermission(
-                                    context,
-                                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                                ) == PackageManager.PERMISSION_GRANTED
-                                if (fineGranted || coarseGranted) {
-                                    if (
-                                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                                        ContextCompat.checkSelfPermission(
-                                            context,
-                                            Manifest.permission.POST_NOTIFICATIONS,
-                                        ) != PackageManager.PERMISSION_GRANTED
-                                    ) {
-                                        pendingLocationStart = true
-                                        notificationsLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                    } else {
-                                        CurrentLocationService.start(context)
+                        } else {
+                            captureSessionId = newCaptureSessionId()
+                            permissionState = permissionReducer.clearMediaProjection(permissionState)
+                            showPermissionOnboarding = true
+                        }
+                    },
+                    onProfileEnabledChange = { enabled ->
+                        updateActiveProfile { profile ->
+                            profile.updated(isEnabled = enabled, updatedAtEpochMs = System.currentTimeMillis())
+                        }
+                    },
+                    onRuleTargetChange = { metric, comparator, target ->
+                        updateActiveProfile { profile ->
+                            val exists = profile.rules.any { it.metric == metric && it.comparator == comparator }
+                            profile.updated(
+                                rules = if (exists) {
+                                    profile.rules.map { rule ->
+                                        if (rule.metric == metric && rule.comparator == comparator) {
+                                            rule.copy(target = target)
+                                        } else {
+                                            rule
+                                        }
                                     }
                                 } else {
-                                    locationPermissionsLauncher.launch(
-                                        arrayOf(
-                                            Manifest.permission.ACCESS_FINE_LOCATION,
-                                            Manifest.permission.ACCESS_COARSE_LOCATION,
-                                        ),
-                                    )
-                                }
-                            }
-                        },
-                        modifier = Modifier.padding(padding),
-                    )
-
-                    AppDestination.SETTINGS -> SettingsScreen(
-                        state = SettingsScreenState(
-                            themeMode = appSettings.themeMode,
-                            visualStyle = appSettings.visualStyle,
-                            fontScale = appSettings.fontScale,
-                            overlayPreferences = overlayPreferences,
-                            accessibilityServiceEnabled = accessibilityServiceEnabled,
-                            speakDecision = speechSettings.speakDecision,
-                            galleryTestStatus = galleryTestStatus,
-                            showDebugTools = BuildConfig.DEBUG,
-                            overlayPosition = overlayPosition,
-                            blockSupermarkets = blockSettings.blockSupermarkets,
-                            fuelPricePerLiterCents = fuelSettings.pricePerLiterCents,
-                            fuelKilometersPerLiter = fuelSettings.kilometersPerLiter,
-                            colorVisionScheme = appSettings.colorVisionScheme,
-                            cardDurationMs = appSettings.cardDurationMs,
-                            acceptThreshold = appSettings.acceptThreshold,
-                            analyzeThreshold = appSettings.analyzeThreshold,
-                        ),
-                        onThemeModeChanged = { selected -> updateSettings { it.copy(themeMode = selected) } },
-                        onVisualStyleChanged = { selected -> updateSettings { it.copy(visualStyle = selected) } },
-                        onFontScaleChanged = { selected -> updateSettings { it.copy(fontScale = selected) } },
-                        onColorVisionSchemeChanged = { selected ->
-                            updateSettings { it.copy(colorVisionScheme = selected) }
-                        },
-                        onCardDurationChanged = { millis -> updateSettings { it.copy(cardDurationMs = millis) } },
-                        onDecisionThresholdsChanged = { accept, analyze ->
-                            // Written together so the analyze <= accept invariant can never be
-                            // observed half-applied by the capture thread.
-                            updateSettings { it.copy(acceptThreshold = accept, analyzeThreshold = analyze) }
-                        },
-                        onOverlayPreferencesChanged = { selected ->
-                            overlayPreferences = overlayPreferencesStore.save(selected)
-                        },
-                        onOverlayPositionChanged = { selected ->
-                            overlayPosition = overlayPositionStore.save(selected)
-                        },
-                        onOpenAccessibilitySettings = {
-                            accessibilityServiceEnabled = context.isDriverAccessibilityServiceEnabled()
-                            context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                        },
-                        onSpeakDecisionChanged = { enabled ->
-                            speechSettings = speechSettingsStore.save(speechSettings.copy(speakDecision = enabled))
-                        },
-                        onBlockSupermarketsChanged = { enabled ->
-                            blockSettings = blockSettingsStore.save(blockSettings.copy(blockSupermarkets = enabled))
-                        },
-                        onFuelPriceChanged = { cents ->
-                            fuelSettings = fuelSettingsStore.save(fuelSettings.copy(pricePerLiterCents = cents))
-                        },
-                        onFuelConsumptionChanged = { kmPerLiter ->
-                            fuelSettings = fuelSettingsStore.save(
-                                fuelSettings.copy(kilometersPerLiter = kmPerLiter),
+                                    profile.rules + FilterRule(metric, comparator, target = target)
+                                },
+                                updatedAtEpochMs = System.currentTimeMillis(),
                             )
-                        },
-                        onTestGalleryImage = {
-                            if (!Settings.canDrawOverlays(context)) {
-                                galleryTestStatus = "Autorize a sobreposição antes do teste para visualizar o card."
-                                overlaySettingsLauncher.launch(
-                                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")),
-                                )
+                        }
+                    },
+                    onRuleEnabledChange = { metric, comparator, enabled ->
+                        updateActiveProfile { profile ->
+                            profile.updated(
+                                rules = profile.rules.map { rule ->
+                                    if (rule.metric == metric && rule.comparator == comparator) {
+                                        rule.copy(enabled = enabled)
+                                    } else {
+                                        rule
+                                    }
+                                },
+                                updatedAtEpochMs = System.currentTimeMillis(),
+                            )
+                        }
+                    },
+                    onEditRule = { metric, comparator -> editingRuleId = FilterRuleId(metric, comparator) },
+                    onAddFilter = { showFilterPicker = true },
+                    onLocationToggle = { enabled ->
+                        if (!enabled) {
+                            CurrentLocationService.stop(context)
+                        } else {
+                            val fineGranted = ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                            ) == PackageManager.PERMISSION_GRANTED
+                            val coarseGranted = ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.ACCESS_COARSE_LOCATION,
+                            ) == PackageManager.PERMISSION_GRANTED
+                            if (fineGranted || coarseGranted) {
+                                if (
+                                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                    ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.POST_NOTIFICATIONS,
+                                    ) != PackageManager.PERMISSION_GRANTED
+                                ) {
+                                    pendingLocationStart = true
+                                    notificationsLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    CurrentLocationService.start(context)
+                                }
                             } else {
-                                galleryImageLauncher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                locationPermissionsLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.ACCESS_FINE_LOCATION,
+                                        Manifest.permission.ACCESS_COARSE_LOCATION,
+                                    ),
                                 )
                             }
-                        },
-                        modifier = Modifier.padding(padding),
-                    )
-                    AppDestination.FILTERS -> Unit
-                    AppDestination.HOME_DESTINATION -> Unit
-                }
-            }
+                        }
+                    },
+                    onFuelPriceChange = { cents ->
+                        fuelSettings = fuelSettingsStore.save(fuelSettings.copy(pricePerLiterCents = cents))
+                    },
+                    onFuelConsumptionChange = { kmPerLiter ->
+                        fuelSettings = fuelSettingsStore.save(fuelSettings.copy(kilometersPerLiter = kmPerLiter))
+                    },
+                    onOverlayFieldsChange = { fields ->
+                        runCatching { OverlayPreferences(fields) }.getOrNull()?.let { selected ->
+                            overlayPreferences = overlayPreferencesStore.save(selected)
+                        }
+                    },
+                    onOverlayLayoutChange = { style -> updateSettings { it.copy(overlayLayout = style) } },
+                    onOverlayFontScaleChange = { scale -> updateSettings { it.copy(overlayFontScale = scale) } },
+                    onConfigureHomeDestination = { destination = AppDestination.HOME_DESTINATION },
+                    onOpenAccessibility = {
+                        accessibilityServiceEnabled = context.isDriverAccessibilityServiceEnabled()
+                        context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    },
+                    onSpeakDecisionChange = { enabled ->
+                        speechSettings = speechSettingsStore.save(speechSettings.copy(speakDecision = enabled))
+                    },
+                    onBlockSupermarketsChange = { enabled ->
+                        blockSettings = blockSettingsStore.save(blockSettings.copy(blockSupermarkets = enabled))
+                    },
+                    onTestGallery = {
+                        if (!Settings.canDrawOverlays(context)) {
+                            galleryTestStatus = "Autorize a sobreposição antes do teste para visualizar o card."
+                            overlaySettingsLauncher.launch(
+                                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")),
+                            )
+                        } else {
+                            galleryImageLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                            )
+                        }
+                    },
+                    onDecisionThresholdsChange = { accept, analyze ->
+                        // Written together so the analyze <= accept invariant can never be
+                        // observed half-applied by the capture thread.
+                        updateSettings { it.copy(acceptThreshold = accept, analyzeThreshold = analyze) }
+                    },
+                    onCardDurationChange = { millis -> updateSettings { it.copy(cardDurationMs = millis) } },
+                ),
+            )
         }
         if (showPermissionOnboarding) {
             PermissionOnboardingSheet(
@@ -613,6 +616,7 @@ fun NexoApp() {
                 onDismiss = { showFilterPicker = false },
             )
         }
+      }
     }
 }
 
@@ -659,32 +663,6 @@ private fun List<FilterRule>.conciseProfileSummary(): String {
         .joinToString(" · ") { it.metric.label }
     val remaining = enabledRules.size - 3
     return if (remaining > 0) "$labels · +$remaining" else labels
-}
-
-@Composable
-private fun DriverBottomBar(selected: AppDestination, onSelected: (AppDestination) -> Unit) {
-    NavigationBar {
-        AppDestination.entries.filter { it.showInBottomBar }.forEach { destination ->
-            NavigationBarItem(
-                selected = selected == destination,
-                onClick = { onSelected(destination) },
-                icon = {
-                    Icon(
-                        painter = painterResource(destinationIconRes(destination)),
-                        contentDescription = destination.label,
-                    )
-                },
-                label = { Text(destination.label) },
-            )
-        }
-    }
-}
-
-@Composable
-private fun destinationIconRes(destination: AppDestination): Int = when (destination) {
-    AppDestination.HOME, AppDestination.HOME_DESTINATION -> R.drawable.ic_navigation_home
-    AppDestination.FILTERS -> R.drawable.ic_navigation_filters
-    AppDestination.SETTINGS -> R.drawable.ic_navigation_settings
 }
 
 private fun DriverDestination.displayName(): String = label ?: originalAddress ?: "Casa"

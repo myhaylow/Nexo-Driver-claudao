@@ -50,7 +50,11 @@ class CurrentLocationService : Service() {
                 CurrentLocationState.PermissionMissing,
                 CurrentLocationState.ProviderUnavailable,
                 -> stopTracking(state)
-                else -> monitorHandler.postDelayed(monitor, MONITOR_INTERVAL_MS)
+                else -> {
+                    // Liga o relógio da telemetria de sessão (idempotente em rebinds).
+                    br.com.nexo.driver.analysis.SessionTelemetryRepository.sessionStarted()
+                    monitorHandler.postDelayed(monitor, MONITOR_INTERVAL_MS)
+                }
             }
             START_NOT_STICKY
         }.getOrElse { failure ->
@@ -65,6 +69,7 @@ class CurrentLocationService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        br.com.nexo.driver.analysis.SessionTelemetryRepository.sessionEnded()
         monitorHandler.removeCallbacks(monitor)
         tracker.close()
         terminalState?.let(CurrentLocationStateRepository::update)
@@ -73,6 +78,7 @@ class CurrentLocationService : Service() {
 
     private fun stopTracking(finalState: CurrentLocationState? = null) {
         terminalState = finalState
+        br.com.nexo.driver.analysis.SessionTelemetryRepository.sessionEnded()
         monitorHandler.removeCallbacks(monitor)
         tracker.close()
         finalState?.let(CurrentLocationStateRepository::update)

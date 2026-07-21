@@ -10,13 +10,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -31,114 +32,182 @@ import androidx.compose.ui.unit.sp
 import br.com.nexo.driver.overlay.preferences.OverlayMetricField
 import br.com.nexo.driver.ui.theme.DriverInteligenteTheme
 
-private val OverlayShape = RoundedCornerShape(20.dp)
-private val StarGold = Color(0xFFFFCF2B)
+// Paleta do redesign (mockup): fundo preto sólido e cores vivas idênticas às do Tailwind enviado,
+// para não "desbotar" como as cores atenuadas do tema.
+private object Overlay {
+    val bg = Color(0xFF000000)          // preto sólido
+    val slate900 = Color(0xFF0F172A)
+    val slate800 = Color(0xFF1E293B)
+    val slate500 = Color(0xFF64748B)
+    val slate400 = Color(0xFF94A3B8)
+    val slate300 = Color(0xFFCBD5E1)
+    val white = Color(0xFFF1F5F9)
+    val yellow = Color(0xFFEAB308)      // yellow-500 (nota, igual ao mockup)
+
+    // Cores de status vivas (Tailwind): emerald-400 / amber-400 / red-400.
+    val emerald = Color(0xFF34D399)
+    val amber = Color(0xFFFBBF24)
+    val red = Color(0xFFF87171)
+}
+
+private val OverlayShape = RoundedCornerShape(16.dp)
 
 /**
- * Compact, non-interactive offer overlay matching the reference "neon" identity:
- * a neon frame with the decision label sitting on the top border, a traffic light that shows the
- * real decision, the payout as the primary value, configurable metrics, and a distance/duration footer.
+ * Overlay compacto no visual aprovado (mockup): barra-título esmeralda com o veredito e o valor da
+ * corrida, grade de métricas configuráveis e rodapé com nota + duração/distância. Continua dirigido
+ * pelos dados reais de [OfferOverlayUiModel]; [fontScale] aumenta só o texto, sem mudar o card.
  *
- * When the trip ends near or heads toward the driver's home, the frame and label turn purple
- * ("sentido casa") while the traffic light keeps signalling accept/analyze/reject so a poor ride
- * that happens to go home is never disguised as a good one.
+ * Quando a corrida vai no sentido de casa, o realce vira roxo ("sentido casa"), preservando esse
+ * sinal do card original.
  */
 @Composable
 fun OfferOverlayCard(
     model: OfferOverlayUiModel,
     modifier: Modifier = Modifier,
+    fontScale: Float = 1f,
+    layout: OverlayLayoutStyle = OverlayLayoutStyle.TOPO,
 ) {
-    val decisionColor = statusColor(model.status)
-    val frameColor = if (model.isTowardHome) DriverInteligenteTheme.statusColors.home else decisionColor
-    val background = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.94f)
+    val accent = if (model.isTowardHome) DriverInteligenteTheme.statusColors.home else vividStatusColor(model.status)
+    val verdict = if (model.isTowardHome) "SENTIDO CASA" else decisionLabel(model.status)
 
     Box(modifier = modifier.fillMaxWidth()) {
-        Surface(
-            modifier = Modifier
+        val cardModifier = when (layout) {
+            // Card estreito ancorado à direita, métricas empilhadas — como o "Vertical" do mockup.
+            OverlayLayoutStyle.VERTICAL -> Modifier
+                .align(Alignment.TopEnd)
+                .padding(horizontal = 8.dp)
+                .width(190.dp)
+            // Topo/Horizontal: card em largura total (o mockup varia só a margem lateral).
+            OverlayLayoutStyle.HORIZONTAL -> Modifier
+                .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                .padding(top = 10.dp),
-            shape = OverlayShape,
-            color = background,
-            border = BorderStroke(2.5.dp, frameColor),
-            tonalElevation = 0.dp,
-            shadowElevation = 12.dp,
+                .padding(horizontal = 4.dp)
+            OverlayLayoutStyle.TOPO -> Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp)
+        }
+        Column(
+            modifier = cardModifier
+                .clip(OverlayShape)
+                .background(Overlay.bg)
+                .border(BorderStroke(1.5.dp, accent.copy(alpha = 0.5f)), OverlayShape),
         ) {
-            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp)) {
-                Spacer(Modifier.height(4.dp))
-                PayoutHeader(model)
-                Spacer(Modifier.height(10.dp))
-                OverlayMetricRow(model)
-                Spacer(Modifier.height(12.dp))
-                MetricDivider()
-                Spacer(Modifier.height(10.dp))
-                OverlayFooter(model)
-                DecisionReason(model, decisionColor)
-                AlternativesStrip(model.alternatives)
+            OverlayHeader(
+                verdict = if (layout == OverlayLayoutStyle.VERTICAL) "NEXO" else verdict,
+                accent = accent,
+                model = model,
+                fontScale = fontScale,
+            )
+            if (layout == OverlayLayoutStyle.VERTICAL) {
+                OverlayMetricsVertical(model = model, fontScale = fontScale)
+            } else {
+                OverlayMetrics(model = model, fontScale = fontScale)
+            }
+            OverlayFooter(model = model, fontScale = fontScale)
+        }
+    }
+}
+
+/** Métricas empilhadas (uma por linha), usadas pelo formato Vertical do mockup. */
+@Composable
+private fun OverlayMetricsVertical(model: OfferOverlayUiModel, fontScale: Float) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        model.gridFields.forEach { field ->
+            val metric = model.metricFor(field)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Overlay.slate900.copy(alpha = 0.9f))
+                    .border(1.dp, Overlay.slate800, RoundedCornerShape(8.dp))
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = field.label.uppercase(),
+                    color = Overlay.slate400,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = (10 * fontScale).sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = if (metric.isAvailable) metric.value else "—",
+                    color = if (metric.isAvailable) valueColor(metric.status) else Overlay.slate500,
+                    fontWeight = FontWeight.Black,
+                    fontSize = (14 * fontScale).sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
-
-        DecisionLabel(
-            text = if (model.isTowardHome) "SENTIDO CASA" else decisionLabel(model.status),
-            color = frameColor,
-            background = background,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .offset(x = 16.dp),
-        )
-
-        TrafficLight(
-            decision = model.status,
-            outline = frameColor,
-            background = background,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .offset(x = (-14).dp),
-        )
     }
 }
 
 @Composable
-private fun PayoutHeader(model: OfferOverlayUiModel) {
+private fun OverlayHeader(
+    verdict: String,
+    accent: Color,
+    model: OfferOverlayUiModel,
+    fontScale: Float,
+) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(accent.copy(alpha = 0.2f))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = "Valor",
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(accent))
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = verdict,
+                color = accent,
+                fontWeight = FontWeight.Black,
+                fontSize = (12 * fontScale).sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        // Valor da corrida no lugar antes ocupado pelo rótulo/semáforo.
         Text(
             text = if (model.isPayoutAvailable) model.payout else "—",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.ExtraBold,
-            color = if (model.isPayoutAvailable) statusColor(model.payoutStatus) else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (model.isPayoutAvailable) Overlay.white else Overlay.slate400,
+            fontWeight = FontWeight.Black,
+            fontSize = (13 * fontScale).sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
     }
 }
+
 @Composable
-private fun OverlayMetricRow(model: OfferOverlayUiModel) {
+private fun OverlayMetrics(model: OfferOverlayUiModel, fontScale: Float) {
     val fields = model.gridFields
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().padding(12.dp),
         verticalAlignment = Alignment.Top,
     ) {
         fields.forEachIndexed { index, field ->
             OverlayMetricCell(
                 field = field,
                 metric = model.metricFor(field),
+                fontScale = fontScale,
                 modifier = Modifier.weight(1f),
             )
             if (index != fields.lastIndex) {
                 Box(
-                    modifier = Modifier
+                    Modifier
                         .width(1.dp)
-                        .height(40.dp)
-                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)),
+                        .height((28 * fontScale).dp)
+                        .background(Overlay.slate800),
                 )
             }
         }
@@ -149,271 +218,87 @@ private fun OverlayMetricRow(model: OfferOverlayUiModel) {
 private fun OverlayMetricCell(
     field: OverlayMetricField,
     metric: OverlayMetricUi,
+    fontScale: Float,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.padding(horizontal = 8.dp)) {
+    Column(
+        modifier = modifier.padding(horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Text(
-            text = field.label,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = field.label.uppercase(),
+            color = Overlay.slate400,
+            fontWeight = FontWeight.Medium,
+            fontSize = (9 * fontScale).sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Spacer(Modifier.height(5.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = if (metric.isAvailable) metric.value else "—",
-                style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            MetricIndicator(field = field, metric = metric)
-        }
-    }
-}
-
-/**
- * Trailing glyph per the reference: a gold star for the rating and a coloured ▲/▼ trend
- * arrow for pass/fail metrics.
- */
-@Composable
-private fun MetricIndicator(field: OverlayMetricField, metric: OverlayMetricUi) {
-    if (!metric.isAvailable) return
-    when (field) {
-        OverlayMetricField.PASSENGER_RATING -> {
-            Spacer(Modifier.width(3.dp))
-            Text(text = "★", color = StarGold, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-        }
-        // A neutral glyph is drawn for ANALYZE so "in the tolerance band" stays distinguishable
-        // from "no rule is watching this metric", which previously looked identical.
-        else -> when (metric.status) {
-            OverlayStatus.ACCEPT -> TrendArrow("▲", statusColor(OverlayStatus.ACCEPT))
-            OverlayStatus.REJECT -> TrendArrow("▼", statusColor(OverlayStatus.REJECT))
-            OverlayStatus.ANALYZE -> TrendArrow("=", statusColor(OverlayStatus.ANALYZE))
-            OverlayStatus.UNKNOWN -> Unit
-        }
+        Text(
+            text = if (metric.isAvailable) metric.value else "—",
+            color = if (metric.isAvailable) valueColor(metric.status) else Overlay.slate500,
+            fontWeight = FontWeight.Black,
+            fontSize = (16 * fontScale).sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
 @Composable
-private fun TrendArrow(glyph: String, color: Color) {
-    Spacer(Modifier.width(4.dp))
-    Text(text = glyph, color = color, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-}
-
-@Composable
-private fun MetricDivider() {
-    Box(
+private fun OverlayFooter(model: OfferOverlayUiModel, fontScale: Float) {
+    val distance = if (model.totalDistance.isAvailable) model.totalDistance.value else null
+    val footerRight = listOfNotNull(model.totalDuration.takeIf { it.isNotBlank() }, distance)
+        .joinToString(" • ")
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(1.dp)
-            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)),
-    )
-}
-
-@Composable
-private fun OverlayFooter(model: OfferOverlayUiModel) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(20.dp),
+            .background(Overlay.slate900.copy(alpha = 0.8f))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FooterStat(
-            label = "Distância:",
-            value = if (model.totalDistance.isAvailable) model.totalDistance.value else "—",
-        )
-        FooterStat(label = "Duração:", value = model.totalDuration)
-    }
-}
-
-/**
- * The one-line justification for the verdict. A low-coverage read is called out explicitly so a
- * cautious amber card is never mistaken for a genuinely middling offer.
- */
-@Composable
-private fun DecisionReason(model: OfferOverlayUiModel, color: Color) {
-    val lowCoverage = model.coveragePercent < LOW_COVERAGE_PERCENT
-    val text = when {
-        model.isBlockedSupermarket -> "Embarque em local bloqueado"
-        lowCoverage -> "Leitura parcial da tela (${model.coveragePercent}%)"
-        else -> model.decisionReason ?: return
-    }
-    Spacer(Modifier.height(8.dp))
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.SemiBold,
-        color = if (lowCoverage) MaterialTheme.colorScheme.onSurfaceVariant else color,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
-    )
-}
-
-/**
- * The other offers on screen at the same time (Uber's tray), ranked best-first under a divider.
- * Each row is a coloured dot (the same accept/analyze/reject signal), the provider, its payout and
- * R$/km. Purely informative -- it never adds a tap target, matching the window's FLAG_NOT_TOUCHABLE.
- */
-@Composable
-private fun AlternativesStrip(alternatives: List<OverlayAlternativeUi>) {
-    if (alternatives.isEmpty()) return
-    Spacer(Modifier.height(10.dp))
-    MetricDivider()
-    Spacer(Modifier.height(8.dp))
-    Text(
-        text = "Outras ofertas na tela",
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    alternatives.forEach { alternative ->
-        Spacer(Modifier.height(6.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(statusColor(alternative.status)),
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Filled.Person,
+                contentDescription = null,
+                tint = Overlay.yellow,
+                modifier = Modifier.size((12 * fontScale).dp),
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(4.dp))
             Text(
-                text = alternative.provider,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = alternative.ratePerKm,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-            )
-            Spacer(Modifier.width(12.dp))
-            Text(
-                text = alternative.payout,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.ExtraBold,
-                color = statusColor(alternative.status),
-                maxLines = 1,
+                text = if (model.passengerRating.isAvailable) model.passengerRating.value else "—",
+                color = Overlay.yellow,
+                fontWeight = FontWeight.Bold,
+                fontSize = (11 * fontScale).sp,
             )
         }
-    }
-}
-
-private const val LOW_COVERAGE_PERCENT = 60
-
-@Composable
-private fun FooterStat(label: String, value: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
+            text = footerRight,
+            color = Overlay.slate300,
+            fontSize = (11 * fontScale).sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
-}
-
-@Composable
-private fun DecisionLabel(
-    text: String,
-    color: Color,
-    background: Color,
-    modifier: Modifier = Modifier,
-) {
-    // A background-filled chip sits on the frame, visually breaking the border line like the mockup.
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(background)
-            .padding(horizontal = 2.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(color.copy(alpha = 0.16f))
-                .border(BorderStroke(1.5.dp, color), RoundedCornerShape(8.dp))
-                .padding(horizontal = 10.dp, vertical = 3.dp),
-        ) {
-            Text(
-                text = text,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.ExtraBold,
-                color = color,
-                letterSpacing = 0.5.sp,
-            )
-        }
-    }
-}
-
-@Composable
-private fun TrafficLight(
-    decision: OverlayStatus,
-    outline: Color,
-    background: Color,
-    modifier: Modifier = Modifier,
-) {
-    val dim = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.22f)
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(9.dp))
-            .background(background),
-    ) {
-        Column(
-            modifier = Modifier
-                .clip(RoundedCornerShape(9.dp))
-                .background(Color(0xFF0D0D0F))
-                .border(BorderStroke(1.5.dp, outline), RoundedCornerShape(9.dp))
-                .padding(horizontal = 5.dp, vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Bulb(on = decision == OverlayStatus.REJECT, onColor = statusColor(OverlayStatus.REJECT), dim = dim)
-            Bulb(on = decision == OverlayStatus.ANALYZE, onColor = statusColor(OverlayStatus.ANALYZE), dim = dim)
-            Bulb(on = decision == OverlayStatus.ACCEPT, onColor = statusColor(OverlayStatus.ACCEPT), dim = dim)
-        }
-    }
-}
-
-@Composable
-private fun Bulb(on: Boolean, onColor: Color, dim: Color) {
-    Box(
-        modifier = Modifier
-            .size(8.dp)
-            .clip(RoundedCornerShape(50))
-            .background(if (on) onColor else dim),
-    )
 }
 
 private fun decisionLabel(status: OverlayStatus): String = when (status) {
-    OverlayStatus.ACCEPT -> "ACEITAR CORRIDA"
+    OverlayStatus.ACCEPT -> "CORRIDA EXCELENTE"
     OverlayStatus.ANALYZE -> "EM ANÁLISE"
     OverlayStatus.REJECT -> "RECUSAR CORRIDA"
     OverlayStatus.UNKNOWN -> "DADOS PARCIAIS"
 }
 
-@Composable
-private fun statusColor(status: OverlayStatus): Color = when (status) {
-    OverlayStatus.ACCEPT -> DriverInteligenteTheme.statusColors.accept
-    OverlayStatus.ANALYZE -> DriverInteligenteTheme.statusColors.analyze
-    OverlayStatus.REJECT -> DriverInteligenteTheme.statusColors.reject
-    OverlayStatus.UNKNOWN -> DriverInteligenteTheme.statusColors.unknown
+// Cores vivas do mockup (não usa as cores atenuadas do tema, para manter a fidelidade pedida).
+private fun vividStatusColor(status: OverlayStatus): Color = when (status) {
+    OverlayStatus.ACCEPT -> Overlay.emerald
+    OverlayStatus.ANALYZE -> Overlay.amber
+    OverlayStatus.REJECT -> Overlay.red
+    OverlayStatus.UNKNOWN -> Overlay.white
 }
+
+// Valores neutros (sem regra observando) ficam claros; os demais herdam a cor viva do status.
+private fun valueColor(status: OverlayStatus): Color = vividStatusColor(status)
 
 @Preview(showBackground = true, backgroundColor = 0xFF141416, widthDp = 360)
 @Composable
@@ -452,30 +337,6 @@ private fun OfferOverlayCardTowardHomePreview() {
                 netProfit = OverlayMetricUi("R$ 46,35", OverlayStatus.UNKNOWN),
                 totalDistance = OverlayMetricUi("18,1 km", OverlayStatus.ACCEPT),
                 isTowardHome = true,
-            ),
-            modifier = Modifier.padding(16.dp),
-        )
-    }
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFF141416, widthDp = 360)
-@Composable
-private fun OfferOverlayCardTrayPreview() {
-    DriverInteligenteTheme {
-        OfferOverlayCard(
-            model = OfferOverlayUiModel(
-                status = OverlayStatus.ACCEPT,
-                totalDuration = "28 min",
-                payout = "R$ 32,10",
-                ratePerKm = OverlayMetricUi("1,90", OverlayStatus.ACCEPT),
-                ratePerHour = OverlayMetricUi("42,10", OverlayStatus.ACCEPT),
-                passengerRating = OverlayMetricUi("4,92", OverlayStatus.ACCEPT),
-                pickup = OverlayMetricUi("3 min · 1,1 km", OverlayStatus.ACCEPT),
-                totalDistance = OverlayMetricUi("12,4 km", OverlayStatus.ACCEPT),
-                alternatives = listOf(
-                    OverlayAlternativeUi("Comfort", "R$ 24,00", "R$ 1,55/km", OverlayStatus.ANALYZE),
-                    OverlayAlternativeUi("UberX", "R$ 15,80", "R$ 1,20/km", OverlayStatus.REJECT),
-                ),
             ),
             modifier = Modifier.padding(16.dp),
         )

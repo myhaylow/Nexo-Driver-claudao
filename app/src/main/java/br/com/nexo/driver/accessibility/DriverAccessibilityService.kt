@@ -333,6 +333,8 @@ class DriverAccessibilityService : AccessibilityService() {
                     visualStyle = result.appearance.visualStyle,
                     colorVisionScheme = result.appearance.colorVisionScheme,
                     cardDurationMs = result.appearance.cardDurationMs,
+                    overlayFontScale = result.appearance.overlayFontScale,
+                    overlayLayout = result.appearance.overlayLayout,
                     appWindowBounds = lastProviderWindowBounds,
                 )
             }.onFailure { failure ->
@@ -364,6 +366,8 @@ class DriverAccessibilityService : AccessibilityService() {
                             fontScale = update.appearance.fontScale,
                             visualStyle = update.appearance.visualStyle,
                             colorVisionScheme = update.appearance.colorVisionScheme,
+                            overlayFontScale = update.appearance.overlayFontScale,
+                            overlayLayout = update.appearance.overlayLayout,
                         )
                     }.onFailure { failure ->
                         Log.w(TAG, "Late destination enrichment could not update overlay.", failure)

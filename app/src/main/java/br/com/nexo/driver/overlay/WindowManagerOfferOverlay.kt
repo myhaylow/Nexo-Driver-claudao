@@ -24,7 +24,6 @@ import br.com.nexo.driver.ui.theme.ColorVisionScheme
 import br.com.nexo.driver.ui.theme.DriverInteligenteTheme
 import br.com.nexo.driver.ui.theme.DriverThemeMode
 import br.com.nexo.driver.ui.theme.DriverVisualStyle
-import br.com.nexo.driver.overlay.preferences.SharedPreferencesOverlayPositionStore
 
 /**
  * Non-touchable overlay window. It deliberately cannot cover or activate controls from
@@ -34,7 +33,6 @@ import br.com.nexo.driver.overlay.preferences.SharedPreferencesOverlayPositionSt
 class WindowManagerOfferOverlay(context: Context) : AutoCloseable {
     private val appContext = context.applicationContext
     private val windowManager = context.getSystemService(WindowManager::class.java)
-    private val positionStore = SharedPreferencesOverlayPositionStore.create(appContext)
     private val overlayModel = mutableStateOf<OfferOverlayUiModel?>(null)
     private val appearance = mutableStateOf(OverlayAppearance())
     // This handler is private to the overlay, so cancelling its callbacks cannot affect the app.
@@ -54,19 +52,23 @@ class WindowManagerOfferOverlay(context: Context) : AutoCloseable {
         visualStyle: DriverVisualStyle = DriverVisualStyle.COCKPIT_PRO,
         colorVisionScheme: ColorVisionScheme = ColorVisionScheme.NORMAL,
         cardDurationMs: Long = OverlayAutoDismissController.DEFAULT_VISIBLE_DURATION_MS,
+        overlayFontScale: Float = 1f,
+        overlayLayout: OverlayLayoutStyle = OverlayLayoutStyle.TOPO,
         /** Screen bounds of the ride app's window, used to place the card clear of its card. */
         appWindowBounds: OverlayWindowBounds? = null,
     ) {
         checkMainThread()
         require(fontScale > 0f) { "Overlay font scale must be positive." }
+        require(overlayFontScale > 0f) { "Overlay card font scale must be positive." }
         overlayModel.value = model
-        appearance.value = OverlayAppearance(themeMode, fontScale, visualStyle, colorVisionScheme)
+        appearance.value =
+            OverlayAppearance(themeMode, fontScale, visualStyle, colorVisionScheme, overlayFontScale, overlayLayout)
         autoDismiss.timeoutMs = cardDurationMs.coerceIn(
             1L,
             OverlayAutoDismissController.MAX_VISIBLE_DURATION_MS,
         )
         if (view != null) {
-            runCatching { windowManager.updateViewLayout(view, layoutParams(appWindowBounds)) }
+            runCatching { windowManager.updateViewLayout(view, layoutParams(overlayLayout, appWindowBounds)) }
             autoDismiss.restart()
             return
         }
@@ -84,12 +86,18 @@ class WindowManagerOfferOverlay(context: Context) : AutoCloseable {
                     visualStyle = currentAppearance.visualStyle,
                     colorVisionScheme = currentAppearance.colorVisionScheme,
                 ) {
-                    overlayModel.value?.let { OfferOverlayCard(it) }
+                    overlayModel.value?.let {
+                        OfferOverlayCard(
+                            model = it,
+                            fontScale = currentAppearance.overlayFontScale,
+                            layout = currentAppearance.overlayLayout,
+                        )
+                    }
                 }
             }
         }
         try {
-            windowManager.addView(composeView, layoutParams(appWindowBounds))
+            windowManager.addView(composeView, layoutParams(overlayLayout, appWindowBounds))
             view = composeView
             owners = viewTreeOwners
             viewTreeOwners.onAttached()
@@ -117,12 +125,16 @@ class WindowManagerOfferOverlay(context: Context) : AutoCloseable {
         fontScale: Float = 1f,
         visualStyle: DriverVisualStyle = DriverVisualStyle.COCKPIT_PRO,
         colorVisionScheme: ColorVisionScheme = ColorVisionScheme.NORMAL,
+        overlayFontScale: Float = 1f,
+        overlayLayout: OverlayLayoutStyle = OverlayLayoutStyle.TOPO,
     ) {
         checkMainThread()
         require(fontScale > 0f) { "Overlay font scale must be positive." }
+        require(overlayFontScale > 0f) { "Overlay card font scale must be positive." }
         if (view == null) return
         overlayModel.value = model
-        appearance.value = OverlayAppearance(themeMode, fontScale, visualStyle, colorVisionScheme)
+        appearance.value =
+            OverlayAppearance(themeMode, fontScale, visualStyle, colorVisionScheme, overlayFontScale, overlayLayout)
     }
 
     fun hide() {
@@ -147,7 +159,10 @@ class WindowManagerOfferOverlay(context: Context) : AutoCloseable {
         }
     }
 
-    private fun layoutParams(appWindowBounds: OverlayWindowBounds?) = WindowManager.LayoutParams(
+    private fun layoutParams(
+        overlayLayout: OverlayLayoutStyle,
+        appWindowBounds: OverlayWindowBounds?,
+    ) = WindowManager.LayoutParams(
         WindowManager.LayoutParams.MATCH_PARENT,
         WindowManager.LayoutParams.WRAP_CONTENT,
         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
@@ -158,10 +173,9 @@ class WindowManagerOfferOverlay(context: Context) : AutoCloseable {
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
         PixelFormat.TRANSLUCENT,
     ).apply {
-        val preferred = positionStore.load()
         val metrics = appContext.resources.displayMetrics
-        val placement = OverlayPlacement.resolve(
-            preferred = preferred,
+        val placement = OverlayPlacement.resolveFor(
+            layout = overlayLayout,
             appWindow = appWindowBounds,
             screenWidth = metrics.widthPixels,
             screenHeight = metrics.heightPixels,
@@ -207,5 +221,7 @@ class WindowManagerOfferOverlay(context: Context) : AutoCloseable {
         val fontScale: Float = 1f,
         val visualStyle: DriverVisualStyle = DriverVisualStyle.COCKPIT_PRO,
         val colorVisionScheme: ColorVisionScheme = ColorVisionScheme.NORMAL,
+        val overlayFontScale: Float = 1f,
+        val overlayLayout: OverlayLayoutStyle = OverlayLayoutStyle.TOPO,
     )
 }

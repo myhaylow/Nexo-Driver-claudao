@@ -40,6 +40,8 @@ data class SettingsScreenState(
     val acceptThreshold: Int = DEFAULT_ACCEPT_THRESHOLD,
     /** Weighted score at or above which the card shows EM ANÁLISE rather than RECUSAR. */
     val analyzeThreshold: Int = DEFAULT_ANALYZE_THRESHOLD,
+    /** Overlay-only text scale (multiplica só o texto do card, sem mudar o tamanho dele). */
+    val overlayFontScale: Float = 1f,
 )
 
 fun ColorVisionScheme.displayName(): String = label

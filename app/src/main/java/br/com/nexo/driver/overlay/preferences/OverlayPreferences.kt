@@ -40,28 +40,35 @@ data class OverlayPreferences(
     val fields: List<OverlayMetricField> = DEFAULT_FIELDS,
 ) {
     init {
-        require(fields.size == OverlaySlot.entries.size) {
-            "An overlay must have exactly ${OverlaySlot.entries.size} fields."
+        require(fields.size in MIN_FIELDS..MAX_FIELDS) {
+            "An overlay must have between $MIN_FIELDS and $MAX_FIELDS fields."
         }
         require(fields.distinct().size == fields.size) {
             "Overlay fields must be unique."
         }
     }
 
-    operator fun get(slot: OverlaySlot): OverlayMetricField = fields[slot.ordinal]
+    operator fun get(slot: OverlaySlot): OverlayMetricField =
+        fields.getOrElse(slot.ordinal) { fields.last() }
 
-    /** Replaces one cell while preserving the four-distinct-fields invariant. */
+    /** Replaces one cell while preserving the distinct-fields invariant. */
     fun withField(slot: OverlaySlot, field: OverlayMetricField): OverlayPreferences {
+        if (slot.ordinal >= fields.size) return this
         val next = fields.toMutableList().also { it[slot.ordinal] = field }
         return OverlayPreferences(next)
     }
 
     companion object {
-        // Default card: payout in the header; R$/km, R$/h, rating and profit in the grid.
+        /** O mockup permite escolher entre 3 e 4 campos exibidos. */
+        const val MIN_FIELDS = 3
+        const val MAX_FIELDS = 4
+
+        // Default card (visual do mockup): valor no header, nota no rodapé; a grade traz R$/km,
+        // R$/h, Lucro % e Lucro — a avaliação não se repete numa célula.
         val DEFAULT_FIELDS = listOf(
             OverlayMetricField.RATE_PER_KM,
             OverlayMetricField.RATE_PER_HOUR,
-            OverlayMetricField.PASSENGER_RATING,
+            OverlayMetricField.NET_PROFIT_PERCENT,
             OverlayMetricField.NET_PROFIT,
         )
 

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Monograma "N" da Nexo, gradiente esmeralda→azul idêntico ao título do app. Conteúdo dentro
+     da zona segura (66dp central) do ícone adaptativo. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M32,32 L45,32 L45,76 L32,76 Z M63,32 L76,32 L76,76 L63,76 Z M32,32 L47,32 L76,76 L61,76 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="32" android:startY="32"
+                android:endX="76" android:endY="76"
+                android:startColor="#FF34D399"
+                android:endColor="#FF3B82F6" />
+        </aapt:attr>
+    </path>
+    <!-- Ponto "semáforo" esmeralda no topo direito, marca da função de decisão. -->
+    <path
+        android:pathData="M79,29m-5,0a5,5 0,1 0,10 0a5,5 0,1 0,-10 0z"
+        android:fillColor="#FF34D399" />
+</vector>
