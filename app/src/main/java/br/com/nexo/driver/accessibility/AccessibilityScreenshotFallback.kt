@@ -15,6 +15,7 @@ import br.com.nexo.driver.capture.visual.OfferCardVisualDetector
 import br.com.nexo.driver.offer.NormalizedOffer
 import br.com.nexo.driver.offer.OfferSource
 import br.com.nexo.driver.ocr.OfferOcrPipeline
+import br.com.nexo.driver.ocr.OcrTextBlock
 import br.com.nexo.driver.ocr.OcrTextSnapshot
 import br.com.nexo.driver.ocr.mlkit.MlKitBitmapOcrEngine
 import java.io.Closeable
@@ -25,7 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 /** Automatic local screenshot/OCR complement when Accessibility text is absent or incomplete. */
 internal class AccessibilityScreenshotFallback(
     private val service: AccessibilityService,
-    private val onOffer: (NormalizedOffer, ScreenshotReadMetrics) -> Unit,
+    private val onOffer: (NormalizedOffer, List<NormalizedOffer>, ScreenshotReadMetrics) -> Unit,
 ) : Closeable {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val worker: ExecutorService = Executors.newSingleThreadExecutor { task ->
@@ -240,10 +241,25 @@ internal class AccessibilityScreenshotFallback(
                         "strategy=${metrics.cropStrategy} crop=${metrics.cropTop}-${metrics.cropBottom} " +
                         "ocrMs=${metrics.ocrMs} totalMs=${metrics.totalMs}",
                 )
+                // If the OCR'd region actually held more than one card (Uber's tray, most likely on a
+                // wide-retry crop), the extra windows ride along as read-only alternatives. On the
+                // common single-card crop extractAll returns one window, so this is an empty list.
+                val alternatives = OfferCardTextRegionExtractor.extractAll(blocks.map { it.text }, providerHint)
+                    .drop(1)
+                    .mapNotNull { window ->
+                        pipeline.parse(
+                            OcrTextSnapshot(
+                                blocks = window.mapIndexed { index, text -> OcrTextBlock(text, index) },
+                                capturedAtEpochMs = System.currentTimeMillis(),
+                                layoutHint = providerHint,
+                            ),
+                        )
+                    }
+                    .filter { it.isReadyForLiveAnalysis() && it.isPlausible() }
                 // Keep a bounded OCR burst alive after the first valid card: Uber can replace
                 // radar cards without sending another accessibility event with usable text.
                 mainHandler.post {
-                    if (isCurrentGeneration(generation)) onOffer(offer, metrics)
+                    if (isCurrentGeneration(generation)) onOffer(offer, alternatives, metrics)
                 }
             } else {
                 logChangedDiagnostic(output.raw.text, offer)

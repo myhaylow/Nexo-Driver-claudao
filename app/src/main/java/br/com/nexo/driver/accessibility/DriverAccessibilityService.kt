@@ -11,6 +11,7 @@ import android.view.accessibility.AccessibilityEvent
 import br.com.nexo.driver.BuildConfig
 import br.com.nexo.driver.analysis.OfferAnalysisProcessor
 import br.com.nexo.driver.analysis.ActiveOfferUpdateGate
+import br.com.nexo.driver.diagnostics.OfferReadFileLogger
 import br.com.nexo.driver.ocr.OfferOcrPipeline
 import br.com.nexo.driver.overlay.OverlayWindowBounds
 import br.com.nexo.driver.overlay.WindowManagerOfferOverlay
@@ -31,6 +32,8 @@ class DriverAccessibilityService : AccessibilityService() {
     private var pendingRead: Runnable? = null
     private var lastNoCardLogAtMs = Long.MIN_VALUE
     private val activeOfferUpdateGate = ActiveOfferUpdateGate()
+    /** Debug-only durable log of served offers, pulled off the device after a real driving session. */
+    private var offerLogger: OfferReadFileLogger? = null
 
     /**
      * Screen bounds of the ride app's window from the most recent read. The overlay uses it to
@@ -46,9 +49,12 @@ class DriverAccessibilityService : AccessibilityService() {
             context = this,
             speaker = speaker,
         )
+        if (BuildConfig.DEBUG) {
+            offerLogger = OfferReadFileLogger(this, BuildConfig.VERSION_NAME).also { it.sessionStart() }
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            screenshotFallback = AccessibilityScreenshotFallback(this) { offer, _ ->
-                val result = processor.analyze(offer, AnalysisSource.OCR)
+            screenshotFallback = AccessibilityScreenshotFallback(this) { offer, alternatives, _ ->
+                val result = processor.analyzeWithAlternatives(offer, alternatives, AnalysisSource.OCR)
                 if (result != null) {
                     publishInitialOffer(offer, AnalysisSource.OCR, result)
                 }
@@ -261,6 +267,23 @@ class DriverAccessibilityService : AccessibilityService() {
                 latencyMs = ageMs.coerceAtLeast(0L),
                 coveragePercent = result.overlay.coveragePercent,
             ),
+        )
+        // Durable, numbers-only record for the next day's driving session; see OfferReadFileLogger.
+        offerLogger?.logServed(
+            path = source.name,
+            provider = offer.source.name,
+            decision = result.overlay.status.name,
+            reason = result.evaluation.reason.name,
+            coveragePercent = result.overlay.coveragePercent,
+            captureToOverlayMs = ageMs.coerceAtLeast(0L),
+            alternatives = result.overlay.alternatives.size,
+            payoutCents = offer.payout.value?.cents,
+            pickupMeters = offer.pickup.distance.value?.meters,
+            pickupSeconds = offer.pickup.duration.value?.seconds,
+            tripMeters = offer.trip.distance.value?.meters,
+            tripSeconds = offer.trip.duration.value?.seconds,
+            ratingScaled = offer.passenger.rating.value,
+            stopCount = offer.stopCount.value,
         )
     }
 
